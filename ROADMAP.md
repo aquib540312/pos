@@ -32,14 +32,19 @@ Status: in progress / see commit history for exact state.
       built on top of the ledger. Known simplification: purchase-side input
       GST credit isn't posted yet because PO/GRN line items don't carry
       HSN/tax-rate data — only ex-tax cost is booked to Inventory.
+- [x] Barcode/QR product labels: `/catalog/products/{id}/barcode.png`
+      (Code128) and `/qr.png` (SKU+name+MRP payload), plus a printable
+      `/label-sheet.png` grid (N copies, configurable columns) sized for
+      standard adhesive label sheets on any regular printer. A "Print
+      labels" action on the Products page opens the sheet in a new tab and
+      triggers the browser print dialog. Direct thermal label-printer
+      (ZPL) output is still Phase 3 — needs your target hardware model.
 - Combo product rule engine (currently: basic percentage/flat discounts and
   manual combo price only; a full rule DSL — "buy 2 get 1", tiered slabs —
   needs your priority ranking of which promo types matter first).
 - GSTR-1/3B **filing** integration — requires a GSP (GST Suvidha Provider)
   API account and credentials from you; today we generate the correct
   line-level data, not the government-format JSON/upload.
-- Barcode label printing (ZPL/thermal label templates) and QR code product
-  labels.
 - Employee management beyond RBAC (attendance, payroll is out of scope for
   a POS unless you want it).
 

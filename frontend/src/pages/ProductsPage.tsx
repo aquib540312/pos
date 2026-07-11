@@ -9,6 +9,9 @@ export default function ProductsPage() {
   const [search, setSearch] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
+  const [labelProduct, setLabelProduct] = useState<Product | null>(null)
+  const [labelCopies, setLabelCopies] = useState(12)
+  const [printingLabels, setPrintingLabels] = useState(false)
 
   const [form, setForm] = useState({
     sku: '',
@@ -51,6 +54,31 @@ export default function ProductsPage() {
       loadProducts(search)
     } catch (err) {
       setError(apiErrorMessage(err))
+    }
+  }
+
+  async function printLabelSheet() {
+    if (!labelProduct) return
+    setPrintingLabels(true)
+    try {
+      const res = await apiClient.get(`/catalog/products/${labelProduct.id}/label-sheet.png`, {
+        params: { copies: labelCopies, columns: 3 },
+        responseType: 'blob',
+      })
+      const url = URL.createObjectURL(res.data as Blob)
+      const printWindow = window.open('', '_blank')
+      if (printWindow) {
+        printWindow.document.write(
+          `<html><head><title>${labelProduct.name} labels</title></head>` +
+            `<body style="margin:0"><img src="${url}" style="width:100%" onload="window.focus();window.print()" /></body></html>`,
+        )
+        printWindow.document.close()
+      }
+      setLabelProduct(null)
+    } catch (err) {
+      setError(apiErrorMessage(err))
+    } finally {
+      setPrintingLabels(false)
     }
   }
 
@@ -113,6 +141,7 @@ export default function ProductsPage() {
               <th className="px-4 py-3">Name</th>
               <th className="px-4 py-3">MRP</th>
               <th className="px-4 py-3">Sale Price</th>
+              <th className="px-4 py-3" />
             </tr>
           </thead>
           <tbody>
@@ -122,16 +151,62 @@ export default function ProductsPage() {
                 <td className="px-4 py-3 font-medium text-slate-900 dark:text-slate-100">{p.name}</td>
                 <td className="px-4 py-3 text-slate-600 dark:text-slate-300">₹{p.mrp.toFixed(2)}</td>
                 <td className="px-4 py-3 text-slate-600 dark:text-slate-300">₹{p.sale_price.toFixed(2)}</td>
+                <td className="px-4 py-3 text-right">
+                  <button
+                    onClick={() => {
+                      setLabelProduct(p)
+                      setLabelCopies(12)
+                    }}
+                    className="text-sm font-medium text-indigo-600 hover:text-indigo-500"
+                  >
+                    Print labels
+                  </button>
+                </td>
               </tr>
             ))}
             {products.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-slate-400">No products found.</td>
+                <td colSpan={5} className="px-4 py-6 text-center text-slate-400">No products found.</td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
+
+      {labelProduct && (
+        <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl dark:bg-slate-800">
+            <h2 className="mb-1 text-lg font-semibold text-slate-900 dark:text-slate-50">Print labels</h2>
+            <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">{labelProduct.name}</p>
+            <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
+              Number of labels
+            </label>
+            <input
+              type="number"
+              min={1}
+              max={100}
+              value={labelCopies}
+              onChange={(e) => setLabelCopies(Number(e.target.value))}
+              className="mb-4 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100"
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setLabelProduct(null)}
+                className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={printLabelSheet}
+                disabled={printingLabels}
+                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-50"
+              >
+                {printingLabels ? 'Generating...' : 'Print'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.core.deps import require_permission
@@ -9,6 +9,12 @@ from app.core.permissions import Perm
 from app.db.session import get_db
 from app.models.catalog import Product
 from app.models.rbac import User
+from app.modules.catalog.labels import (
+    InvalidLabelDataError,
+    generate_barcode_png,
+    generate_label_sheet_png,
+    generate_qr_png,
+)
 from app.modules.catalog.schemas import (
     CategoryCreateRequest,
     CategoryResponse,
@@ -161,3 +167,52 @@ def create_product(
         db.rollback()
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
     return _to_product_response(service, product)
+
+
+@router.get("/products/{product_id}/barcode.png")
+def get_product_barcode_image(
+    product_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(require_permission(Perm.CATALOG_VIEW))
+):
+    service = CatalogService(db)
+    try:
+        product = service.get_product_or_404(product_id)
+    except NotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
+    try:
+        png = generate_barcode_png(product.barcode or product.sku)
+    except InvalidLabelDataError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+    return Response(content=png, media_type="image/png")
+
+
+@router.get("/products/{product_id}/qr.png")
+def get_product_qr_image(
+    product_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(require_permission(Perm.CATALOG_VIEW))
+):
+    service = CatalogService(db)
+    try:
+        product = service.get_product_or_404(product_id)
+    except NotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
+    payload = f"SKU:{product.sku}|{product.name}|MRP:{product.mrp}"
+    return Response(content=generate_qr_png(payload), media_type="image/png")
+
+
+@router.get("/products/{product_id}/label-sheet.png")
+def get_product_label_sheet(
+    product_id: uuid.UUID,
+    copies: int = Query(default=1, ge=1, le=100),
+    columns: int = Query(default=3, ge=1, le=6),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission(Perm.CATALOG_VIEW)),
+):
+    service = CatalogService(db)
+    try:
+        product = service.get_product_or_404(product_id)
+    except NotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
+    try:
+        png = generate_label_sheet_png(product.barcode or product.sku, product.name, float(product.mrp), copies, columns)
+    except InvalidLabelDataError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+    return Response(content=png, media_type="image/png")
