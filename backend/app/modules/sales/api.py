@@ -1,3 +1,4 @@
+import logging
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -14,6 +15,7 @@ from app.core.exceptions import (
 from app.core.permissions import Perm
 from app.db.session import get_db
 from app.models.rbac import User
+from app.modules.notifications.tasks import send_notification_task
 from app.modules.sales.schemas import (
     ReturnCreateRequest,
     ReturnResponse,
@@ -23,6 +25,7 @@ from app.modules.sales.schemas import (
 from app.modules.sales.service import SalesService
 
 router = APIRouter(prefix="/api/v1/sales", tags=["sales"])
+logger = logging.getLogger("app.sales")
 
 _ERROR_STATUS = {
     NotFoundError: status.HTTP_404_NOT_FOUND,
@@ -38,6 +41,23 @@ def _handle(exc: DomainError, db: Session):
         if isinstance(exc, exc_type):
             raise HTTPException(code, str(exc)) from exc
     raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+
+
+def _dispatch_receipt_sms(service: SalesService, invoice) -> None:
+    """Best-effort: a receipt SMS is a side effect of a *successful* sale,
+    never part of its transactional integrity, so this runs after commit
+    and swallows every failure (no broker running, no customer phone,
+    MSG91 down) rather than letting any of them surface as a checkout
+    error -- the sale already happened."""
+    if not invoice.customer_id:
+        return
+    try:
+        customer = service.customers.get(invoice.customer_id)
+        if customer and customer.phone:
+            message = f"Invoice {invoice.invoice_number}: Rs.{invoice.grand_total} paid. Thank you for shopping with us!"
+            send_notification_task.delay("sms", customer.phone, message)
+    except Exception:  # noqa: BLE001 - notification dispatch must never break checkout
+        logger.warning("Failed to queue receipt SMS for invoice %s", invoice.id, exc_info=True)
 
 
 @router.get("", response_model=list[SaleInvoiceResponse])
@@ -80,6 +100,7 @@ def create_sale(
         db.commit()
     except DomainError as exc:
         _handle(exc, db)
+    _dispatch_receipt_sms(service, invoice)
     return invoice
 
 

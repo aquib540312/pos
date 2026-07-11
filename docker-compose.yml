@@ -1,3 +1,25 @@
+x-backend-env: &backend-env
+  POS_DATABASE_URL: postgresql+psycopg2://pos:pos@postgres:5432/pos
+  POS_REDIS_URL: redis://redis:6379/0
+  POS_SECRET_KEY: ${POS_SECRET_KEY:-change-me-in-production}
+  # Razorpay (UPI QR payments) -- test-mode defaults are safe to ship;
+  # set real rzp_live_... keys in production. See ARCHITECTURE.md #9.
+  POS_RAZORPAY_KEY_ID: ${POS_RAZORPAY_KEY_ID:-rzp_test_0000000000000}
+  POS_RAZORPAY_KEY_SECRET: ${POS_RAZORPAY_KEY_SECRET:-test_secret_change_me}
+  POS_RAZORPAY_WEBHOOK_SECRET: ${POS_RAZORPAY_WEBHOOK_SECRET:-test_webhook_secret_change_me}
+  # MSG91 (SMS) -- leave blank to keep notifications on the safe logging adapter.
+  POS_MSG91_AUTH_KEY: ${POS_MSG91_AUTH_KEY:-}
+  POS_MSG91_SENDER_ID: ${POS_MSG91_SENDER_ID:-POSAPP}
+  POS_MSG91_FLOW_ID: ${POS_MSG91_FLOW_ID:-}
+  # Epson ESC/POS thermal printer (network, port 9100 by convention).
+  POS_PRINTER_HOST: ${POS_PRINTER_HOST:-192.168.1.100}
+  POS_PRINTER_PORT: ${POS_PRINTER_PORT:-9100}
+  POS_PRINTER_ENABLED: ${POS_PRINTER_ENABLED:-false}
+  # GST Suvidha Provider -- "mock" by default (see ARCHITECTURE.md #9).
+  POS_GSP_PROVIDER: ${POS_GSP_PROVIDER:-mock}
+  POS_GSP_BASE_URL: ${POS_GSP_BASE_URL:-https://sandbox.example-gsp.invalid}
+  POS_GSP_API_KEY: ${POS_GSP_API_KEY:-mock-gsp-api-key}
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -27,10 +49,7 @@ services:
 
   backend:
     build: ./backend
-    environment:
-      POS_DATABASE_URL: postgresql+psycopg2://pos:pos@postgres:5432/pos
-      POS_REDIS_URL: redis://redis:6379/0
-      POS_SECRET_KEY: ${POS_SECRET_KEY:-change-me-in-production}
+    environment: *backend-env
     depends_on:
       postgres:
         condition: service_healthy
@@ -43,10 +62,7 @@ services:
     build: ./backend
     command: celery -A app.celery_app:celery_app worker --loglevel=info
     entrypoint: []
-    environment:
-      POS_DATABASE_URL: postgresql+psycopg2://pos:pos@postgres:5432/pos
-      POS_REDIS_URL: redis://redis:6379/0
-      POS_SECRET_KEY: ${POS_SECRET_KEY:-change-me-in-production}
+    environment: *backend-env
     depends_on:
       postgres:
         condition: service_healthy

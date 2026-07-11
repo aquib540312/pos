@@ -8,6 +8,7 @@ from app.models.accounting import JournalEntry, JournalLine, LedgerAccount
 from app.models.catalog import HSNCode, Product
 from app.models.inventory import StockItem
 from app.models.sales import SalesInvoice, SalesInvoiceItem
+from app.modules.gst_filing.schema_builder import B2CSLine
 from app.modules.reports.schemas import (
     BalanceSheetResponse,
     GSTR1LineRow,
@@ -121,6 +122,59 @@ class ReportService:
             )
             for hsn_code, rate, taxable, cgst, sgst, igst, cess, count in self.db.execute(stmt).all()
         ]
+
+    def gstr1_b2cs_summary(self, organization_id: uuid.UUID, start: date, end: date) -> list[B2CSLine]:
+        """GSTR-1 Table 7 (B2C small) grouping: by place of supply, intra-
+        vs inter-state, and rate. This is the section a retail POS's walk-
+        in/unregistered-consumer sales populate; B2B invoice-wise (Table 4)
+        would need per-invoice buyer GSTIN reporting, not yet built (see
+        gst_filing/schema_builder.py docstring)."""
+        start_dt = datetime.combine(start, time.min, tzinfo=timezone.utc)
+        end_dt = datetime.combine(end, time.max, tzinfo=timezone.utc)
+        stmt = (
+            select(
+                SalesInvoice.place_of_supply_state_code,
+                SalesInvoice.is_inter_state,
+                SalesInvoiceItem.tax_rate_percent,
+                func.sum(SalesInvoiceItem.taxable_value),
+                func.sum(SalesInvoiceItem.cgst_amount),
+                func.sum(SalesInvoiceItem.sgst_amount),
+                func.sum(SalesInvoiceItem.igst_amount),
+                func.sum(SalesInvoiceItem.cess_amount),
+            )
+            .join(SalesInvoice, SalesInvoice.id == SalesInvoiceItem.invoice_id)
+            .where(
+                SalesInvoice.organization_id == organization_id,
+                SalesInvoice.status == "posted",
+                SalesInvoice.invoice_date >= start_dt,
+                SalesInvoice.invoice_date <= end_dt,
+            )
+            .group_by(SalesInvoice.place_of_supply_state_code, SalesInvoice.is_inter_state, SalesInvoiceItem.tax_rate_percent)
+        )
+        return [
+            B2CSLine(
+                place_of_supply_state_code=pos,
+                is_inter_state=is_inter_state,
+                tax_rate_percent=float(rate),
+                taxable_value=float(taxable),
+                cgst=float(cgst),
+                sgst=float(sgst),
+                igst=float(igst),
+                cess=float(cess),
+            )
+            for pos, is_inter_state, rate, taxable, cgst, sgst, igst, cess in self.db.execute(stmt).all()
+        ]
+
+    def gross_turnover(self, organization_id: uuid.UUID, start: date, end: date) -> float:
+        start_dt = datetime.combine(start, time.min, tzinfo=timezone.utc)
+        end_dt = datetime.combine(end, time.max, tzinfo=timezone.utc)
+        stmt = select(func.coalesce(func.sum(SalesInvoice.grand_total), 0)).where(
+            SalesInvoice.organization_id == organization_id,
+            SalesInvoice.status == "posted",
+            SalesInvoice.invoice_date >= start_dt,
+            SalesInvoice.invoice_date <= end_dt,
+        )
+        return float(self.db.execute(stmt).scalar_one())
 
     def _account_balances(
         self, organization_id: uuid.UUID, account_type: str, *, start: date | None = None, end: date

@@ -6,11 +6,14 @@ from app.modules.audit.api import router as audit_router
 from app.modules.auth.api import router as auth_router
 from app.modules.billing.api import router as billing_router
 from app.modules.catalog.api import router as catalog_router
+from app.modules.gst_filing.api import router as gst_filing_router
 from app.modules.inventory.api import router as inventory_router
 from app.modules.loyalty.api import router as loyalty_router
 from app.modules.notifications.api import router as notifications_router
 from app.modules.organizations.api import router as organizations_router
 from app.modules.party.api import router as party_router
+from app.modules.payments.api import router as payments_router
+from app.modules.printing.api import router as printing_router
 from app.modules.purchasing.api import router as purchasing_router
 from app.modules.rbac.api import router as rbac_router
 from app.modules.reports.api import router as reports_router
@@ -41,6 +44,9 @@ for router in (
     reports_router,
     loyalty_router,
     notifications_router,
+    payments_router,
+    printing_router,
+    gst_filing_router,
     audit_router,
 ):
     app.include_router(router)

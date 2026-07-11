@@ -64,40 +64,70 @@ Status: in progress / see commit history for exact state.
 - Employee management beyond RBAC (attendance, payroll is out of scope for
   a POS unless you want it).
 
-## Phase 3 — Channel expansion (needs infrastructure decisions from you)
-- **Offline-first + sync**: design in `ARCHITECTURE.md` §5. Needs your
-  answer on oversell tolerance and conflict-resolution policy before
-  implementation.
-- **Electron desktop shell**: thin wrapper over the web frontend +
-  local SQLite cache + thermal printer driver (ESC/POS) + cash drawer
-  kick (serial/USB) integration — needs to know your target printer
-  models (most speak ESC/POS over USB/serial, but confirm before we pick
-  a driver library).
+## Phase 3 — Channel expansion
+
+- [x] **Payments (Razorpay UPI QR)**: real, documented QR Code API
+      integration (`app/modules/payments/`) — create/close a dynamic UPI
+      QR tied to a sale amount, webhook confirms payment with real
+      HMAC-SHA256 signature verification via the official SDK. Ships with
+      Razorpay *test-mode* keys as safe defaults; swap
+      `POS_RAZORPAY_KEY_ID/SECRET/WEBHOOK_SECRET` for live values from
+      the dashboard and it works unchanged. Not yet wired into the POS
+      billing screen UI (backend + webhook are complete and tested; the
+      frontend still only does the manual cash/card/upi/wallet entry
+      built earlier) — say the word if you want that UI next.
+- [x] **SMS (MSG91)**: real Flow API integration
+      (`app/modules/notifications/adapters.py`), wired to an actual
+      trigger — every completed sale with a customer phone on file
+      queues a receipt SMS via Celery, best-effort (never blocks
+      checkout). Needs `POS_MSG91_AUTH_KEY` + a DLT-registered template
+      (`POS_MSG91_FLOW_ID`) from your MSG91 dashboard; falls back to a
+      safe logging adapter until configured.
+- [x] **Thermal printing (Epson ESC/POS)**: real ESC/POS command
+      generation (`app/modules/printing/`, via `python-escpos`) for a
+      full receipt layout, sendable to any Epson TM-series or ESC/POS-
+      compatible printer over the network (raw port 9100) or previewable
+      as raw bytes with no hardware at all
+      (`GET /printing/receipt/{id}/escpos`). Set `POS_PRINTER_HOST/PORT`
+      and `POS_PRINTER_ENABLED=true` to print for real; every failure is
+      caught and logged, never breaks a sale.
+- [x] **GST e-filing (GSP)**: `app/modules/gst_filing/` renders our GST
+      report data into the actual GSTN GSTR-1 JSON schema (HSN summary +
+      B2C-small) and runs a full generate → submit → status workflow
+      against a `MockGSPAdapter` (deterministic fake acknowledgements) by
+      default. `HttpGSPAdapter` implements the generic submit/poll shape
+      most GSPs share; set `POS_GSP_PROVIDER=http` plus your real GSP's
+      base URL/API key once you have a contract (ClearTax, Cygnet,
+      MasterGST, etc.) — the two endpoint paths are the part you'll
+      adjust to that provider's specific docs. B2B (GSTIN-wise) invoice
+      reporting isn't built yet, only B2C-small — see
+      `gst_filing/schema_builder.py`.
+- **Offline-first + sync**: design in `ARCHITECTURE.md` §5. Still needs
+  your answer on oversell tolerance and conflict-resolution policy
+  before implementation.
+- **Electron desktop shell**: thin wrapper over the web frontend + local
+  SQLite cache + cash drawer kick (serial/USB). The ESC/POS printing
+  piece is now built and reusable from Electron too (it's just talking
+  to the same printer over the network) — what's left here is
+  specifically the offline cache and drawer-kick integration.
 - **React Native mobile**: for supervisor dashboards / handheld barcode
-  scanning; POS billing on a phone is unusual for retail counters — confirm
-  this is actually wanted before building it.
-- **UPI QR integration**: needs a payment aggregator (Razorpay/PhonePe/
-  BharatPe/PayU) merchant account and API keys — we can generate static
-  UPI intent QR codes (upi://pay?...) without a gateway for basic cases,
-  or dynamic reconciled QR via an aggregator if you want auto-reconciliation.
-- **SMS/Email/WhatsApp**: needs provider accounts (e.g. MSG91/Twilio for
-  SMS, WhatsApp Business API via Meta or a BSP like Gupshup/Interakt).
-  Notification module is stubbed with an adapter interface so swapping in
-  real credentials is a config change, not a rewrite.
+  scanning — confirm this is actually wanted before building it; POS
+  billing on a phone is unusual for a retail counter.
 - Restaurant module (tables, KOT, kitchen display) — explicitly marked
-  optional in the brief; build after core retail flows are validated with
-  real usage.
-- Plugin architecture (third-party extensibility) — design after 2-3 real
-  modules exist to extract a genuine extension point from, rather than
-  guessing one upfront.
+  optional in the brief; build after core retail flows are validated
+  with real usage.
+- Plugin architecture (third-party extensibility) — design after 2-3
+  real modules exist to extract a genuine extension point from, rather
+  than guessing one upfront.
 
 ## Explicitly deferred, needs your decision before scheduling
 1. Which business type to pilot first (grocery/supermarket vs medical vs
    electronics vs garment) — the generic catalog/batch/serial model covers
    all four reasonably, but medical stores often need drug-schedule
    (H/H1/X) compliance fields; confirm if that's needed.
-2. Payment gateway / UPI aggregator choice.
-3. SMS/WhatsApp provider choice.
-4. Whether GSTR filing needs to be automated (GSP integration) or if
-   exporting correct data for manual filing is sufficient.
-5. Target thermal printer hardware models (for the Electron ESC/POS driver).
+2. Whether to wire the Razorpay UPI QR flow into the POS billing screen
+   UI (backend is done and tested).
+3. Real Razorpay/MSG91/GSP credentials, and which specific GSP to
+   contract with, once you're ready to go live.
+4. Target thermal printer hardware model to validate against for real
+   (architecture assumes standard Epson ESC/POS over network, port 9100).

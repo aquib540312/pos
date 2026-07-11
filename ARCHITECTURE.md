@@ -148,7 +148,75 @@ checks.
   create-invoice endpoint actually decrements stock and posts ledger rows.
 - CI runs both on every push (see `.github/workflows/ci.yml`).
 
-## 9. Folder structure
+## 9. External integrations: adapter pattern
+
+Every third-party integration (payment gateway, SMS, thermal printing,
+GST e-filing) follows the same shape, so swapping a provider or moving
+from sandbox to production credentials is a config change, never a
+rewrite of calling code:
+
+```
+NotificationAdapter / PaymentGatewayAdapter / GSPAdapter  (Protocol)
+        ├── LoggingAdapter / MockGSPAdapter                (safe default)
+        └── MSG91Adapter / RazorpayAdapter / HttpGSPAdapter (real, config-driven)
+```
+
+A factory function (`_resolve_adapter`, `get_gsp_adapter`, or the
+service constructor's `adapter or RealAdapter(settings)` default)
+picks the real implementation only when its credentials are actually
+configured; every module also accepts an injected adapter so tests
+exercise the calling code against a fake without any network access.
+Concretely, in this codebase:
+
+- **Payments (Razorpay UPI QR)** — `app/modules/payments/adapters.py`.
+  `RazorpayAdapter` implements the real, documented QR Code API
+  (create/close a dynamic UPI QR, HMAC-SHA256 webhook signature
+  verification via the official SDK). A `PaymentGatewayTransaction` row
+  tracks a QR from creation through the `qr_code.credited`/
+  `payment.captured` webhook that marks it paid — deliberately separate
+  from `SalesInvoice`/`Payment`, since in a physical POS the money
+  arrives *before* the cashier finalizes the sale record; once paid, its
+  gateway reference is passed as an ordinary `reference` on the normal
+  `POST /sales` call, so the core checkout flow needed zero changes to
+  support it. Swap `POS_RAZORPAY_KEY_ID/SECRET/WEBHOOK_SECRET` for live
+  values from the Razorpay dashboard; nothing else changes.
+- **SMS (MSG91)** — `app/modules/notifications/adapters.py`.
+  `MSG91Adapter` implements the real Flow API (template-based, since
+  Indian transactional SMS is DLT-regulated and can't send free text).
+  Falls back to `LoggingAdapter` until `POS_MSG91_AUTH_KEY` and
+  `POS_MSG91_FLOW_ID` are set. Wired to a real trigger: a receipt SMS
+  fires (via Celery, best-effort, never blocking checkout) after every
+  completed sale with a customer phone on file.
+- **Thermal printing (Epson ESC/POS)** — `app/modules/printing/`.
+  `receipt_builder.py` is a pure function writing real ESC/POS commands
+  (via `python-escpos`) onto any printer-shaped object — `Dummy()` for
+  tests/preview (captures bytes, no hardware), `Network(host, port)` for
+  a real Epson TM-series or any ESC/POS-compatible network printer
+  (raw TCP port 9100 by convention). Set `POS_PRINTER_HOST`/`_PORT` and
+  `POS_PRINTER_ENABLED=true`; printing is always dispatched through
+  Celery and every failure is caught and logged, never raised, since a
+  jammed or offline printer must not be able to block a sale.
+- **GST e-filing (GSP)** — `app/modules/gst_filing/`.
+  `schema_builder.py` renders our existing GST report data into the
+  actual published GSTN GSTR-1 JSON schema (HSN summary + B2C-small
+  sections). `MockGSPAdapter` (the default) fully exercises
+  generate→submit→status with deterministic fake acknowledgements;
+  `HttpGSPAdapter` implements the generic submit-JSON/poll-status shape
+  most GSPs (ClearTax, Cygnet, MasterGST, ...) share. Set
+  `POS_GSP_PROVIDER=http` plus `POS_GSP_BASE_URL`/`POS_GSP_API_KEY` once
+  you have a real GSP contract — the two endpoint paths in
+  `HttpGSPAdapter` are the part you'll adjust to match that specific
+  provider's API docs.
+
+None of these were tested against a live provider (no real credentials
+exist yet) — what's verified is the code we own: real cryptographic/
+signature logic (webhook verification), real byte-level protocol output
+(ESC/POS commands), real JSON schema shape (GSTR-1), and the full
+request/response flow through each service with the network boundary
+mocked at the adapter's edge. That boundary is intentionally the
+*only* thing a real credential swap touches.
+
+## 10. Folder structure
 
 ```
 pos/
@@ -164,6 +232,7 @@ pos/
       modules/
         auth/  organizations/  rbac/  catalog/  inventory/
         purchasing/  sales/  billing/  gst/  accounting/  loyalty/  reports/  audit/
+        notifications/  payments/  printing/  gst_filing/   # external integrations, see §9
         <module>/repository.py service.py api.py
       main.py
     alembic/
