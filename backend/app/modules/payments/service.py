@@ -37,17 +37,37 @@ class PaymentGatewayService:
                 status="created",
                 receipt_reference=receipt_reference,
                 qr_image_url=result.image_url,
+                close_by=datetime.fromtimestamp(result.close_by, tz=timezone.utc),
             )
         )
 
     def get_status(self, transaction_id: uuid.UUID) -> PaymentGatewayTransaction:
+        """Expiry is checked lazily on read rather than by a background
+        job: a QR nobody has looked at in the last 15 minutes doesn't
+        need active cleanup, and the till polling this endpoint is
+        exactly the moment that matters -- the first poll after close_by
+        naturally flips it to "expired" for the cashier."""
         transaction = self.transactions.get(transaction_id)
         if transaction is None:
             raise NotFoundError(f"Payment transaction {transaction_id} not found")
+        close_by = transaction.close_by
+        if close_by is not None and close_by.tzinfo is None:
+            # SQLite (used in tests) doesn't preserve tz-awareness across a
+            # round trip even though the column is DateTime(timezone=True)
+            # and every write is UTC -- Postgres in production doesn't need
+            # this, but treating a naive read as UTC is correct either way.
+            close_by = close_by.replace(tzinfo=timezone.utc)
+        if transaction.status == "created" and close_by is not None and datetime.now(timezone.utc) >= close_by:
+            transaction.status = "expired"
+            self.db.flush()
         return transaction
 
     def cancel(self, transaction_id: uuid.UUID) -> PaymentGatewayTransaction:
-        transaction = self.get_status(transaction_id)
+        transaction = self.get_status(transaction_id)  # also applies lazy expiry
+        if transaction.status != "created":
+            # Already paid/expired/closed -- nothing to cancel, and closing
+            # an already-terminal QR on Razorpay's side would just error.
+            return transaction
         self.adapter.close_qr(transaction.gateway_reference)
         transaction.status = "closed"
         self.db.flush()

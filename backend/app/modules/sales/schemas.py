@@ -29,6 +29,15 @@ class SaleCreateRequest(BaseModel):
     coupon_code: str | None = None
     gift_card_number: str | None = None
     gift_card_amount: float = Field(default=0, ge=0)
+    payment_gateway_transaction_id: uuid.UUID | None = Field(
+        default=None,
+        description=(
+            "A PaymentGatewayTransaction id (e.g. a Razorpay UPI QR) already "
+            "confirmed paid via webhook. The server independently verifies its "
+            "status and amount -- it is never taken from the request as-is -- "
+            "and rejects reuse of an already-consumed transaction."
+        ),
+    )
 
 
 class SaleInvoiceItemResponse(BaseModel):

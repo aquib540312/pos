@@ -23,6 +23,15 @@ class Settings(BaseSettings):
     razorpay_key_id: str = "rzp_test_0000000000000"
     razorpay_key_secret: str = "test_secret_change_me"
     razorpay_webhook_secret: str = "test_webhook_secret_change_me"
+    # Feature flag: shows/hides the "Pay via UPI QR" option in the POS
+    # billing screen. Safe to leave on with test-mode keys (nothing real
+    # can be charged); turn off if you want the QR flow hidden entirely
+    # without touching code, e.g. mid-incident or before keys are ready.
+    razorpay_upi_enabled: bool = True
+    # How long a generated QR stays payable before the till gives up and
+    # reports it "expired" (matches the window RazorpayAdapter requests
+    # from Razorpay itself -- see close_by in adapters.py).
+    razorpay_qr_expiry_minutes: int = 15
 
     # -- SMS (MSG91) ---------------------------------------------------
     # Leave msg91_auth_key blank to keep notifications on the logging

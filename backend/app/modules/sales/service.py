@@ -3,11 +3,12 @@ from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
-from app.core.exceptions import NotFoundError, ValidationError
+from app.core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.core.numbering import next_document_number
 from app.models.billing import Payment
 from app.models.catalog import Product
 from app.models.organization import Branch
+from app.models.payments import PaymentGatewayTransaction
 from app.models.sales import SalesInvoice, SalesInvoiceItem, SalesReturn, SalesReturnItem
 from app.modules.accounting.service import AccountingService
 from app.modules.catalog.repository import HSNRepository, ProductRepository
@@ -88,6 +89,27 @@ class SalesService:
                 sales_return_id,
             )
 
+    def _verify_and_reserve_gateway_transaction(
+        self, organization_id: uuid.UUID, transaction_id: uuid.UUID, invoice_id: uuid.UUID
+    ) -> PaymentGatewayTransaction:
+        """Server-side gate for consuming a Razorpay UPI QR payment into a
+        sale: the amount and paid status come only from this row (set by
+        the webhook handler), never from the request body, and setting
+        invoice_id here is what makes the transaction single-use -- a
+        second call with the same transaction_id (e.g. a retried/duplicate
+        POST /sales) hits the invoice_id check below and is rejected."""
+        transaction = self.db.get(PaymentGatewayTransaction, transaction_id)
+        if transaction is None or transaction.organization_id != organization_id:
+            raise NotFoundError(f"Payment transaction {transaction_id} not found")
+        if transaction.status != "paid":
+            raise ValidationError(f"Payment transaction {transaction_id} is not paid (status={transaction.status})")
+        if transaction.invoice_id is not None:
+            raise ConflictError(f"Payment transaction {transaction_id} has already been applied to an invoice")
+
+        transaction.invoice_id = invoice_id
+        self.db.flush()
+        return transaction
+
     def create_sale(
         self,
         organization_id: uuid.UUID,
@@ -102,6 +124,7 @@ class SalesService:
         coupon_code: str | None = None,
         gift_card_number: str | None = None,
         gift_card_amount: float = 0,
+        payment_gateway_transaction_id: uuid.UUID | None = None,
     ) -> SalesInvoice:
         branch = self.db.get(Branch, branch_id)
         if branch is None:
@@ -221,6 +244,20 @@ class SalesService:
         if gift_card_number and gift_card_amount > 0:
             redeemed = self.gift_cards.redeem(organization_id, gift_card_number, gift_card_amount, invoice.id)
             payments = [*payments, {"method": "gift_card", "amount": redeemed, "reference": gift_card_number}]
+
+        gateway_transaction = None
+        if payment_gateway_transaction_id is not None:
+            gateway_transaction = self._verify_and_reserve_gateway_transaction(
+                organization_id, payment_gateway_transaction_id, invoice.id
+            )
+            payments = [
+                *payments,
+                {
+                    "method": "upi",
+                    "amount": float(gateway_transaction.amount),
+                    "reference": gateway_transaction.gateway_reference,
+                },
+            ]
 
         payment_total = sum(p["amount"] for p in payments)
         shortfall = round(grand_total - payment_total, 2)

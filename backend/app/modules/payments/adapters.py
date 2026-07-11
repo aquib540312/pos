@@ -42,6 +42,7 @@ class RazorpayAdapter:
     def __init__(self, settings: Settings):
         self._client = razorpay.Client(auth=(settings.razorpay_key_id, settings.razorpay_key_secret))
         self._webhook_secret = settings.razorpay_webhook_secret
+        self._expiry_seconds = settings.razorpay_qr_expiry_minutes * 60
 
     def create_upi_qr(self, amount_rupees: float, receipt_reference: str) -> QRCodeResult:
         # Razorpay amounts are always in paise (smallest currency unit).
@@ -53,7 +54,7 @@ class RazorpayAdapter:
                 "fixed_amount": True,
                 "payment_amount": round(amount_rupees * 100),
                 "description": receipt_reference,
-                "close_by": int(time.time()) + 15 * 60,  # QR expires in 15 minutes
+                "close_by": int(time.time()) + self._expiry_seconds,
                 "notes": {"receipt_reference": receipt_reference},
             }
         )

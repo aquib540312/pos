@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.deps import require_permission
 from app.core.exceptions import (
+    ConflictError,
     CreditLimitExceededError,
     DomainError,
     InsufficientStockError,
@@ -32,6 +33,7 @@ _ERROR_STATUS = {
     ValidationError: status.HTTP_422_UNPROCESSABLE_ENTITY,
     InsufficientStockError: status.HTTP_409_CONFLICT,
     CreditLimitExceededError: status.HTTP_422_UNPROCESSABLE_ENTITY,
+    ConflictError: status.HTTP_409_CONFLICT,
 }
 
 
@@ -96,6 +98,7 @@ def create_sale(
             coupon_code=payload.coupon_code,
             gift_card_number=payload.gift_card_number,
             gift_card_amount=payload.gift_card_amount,
+            payment_gateway_transaction_id=payload.payment_gateway_transaction_id,
         )
         db.commit()
     except DomainError as exc:

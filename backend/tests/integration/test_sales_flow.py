@@ -151,6 +151,136 @@ def test_credit_sale_within_limit_succeeds_and_updates_balance(client, seeded_or
     assert customer_check.json()["credit_balance"] == sale_resp.json()["grand_total"]
 
 
+def _paid_gateway_transaction(db_session, seeded_org, amount, reference="qr_paid_test"):
+    from app.models.payments import PaymentGatewayTransaction
+
+    transaction = PaymentGatewayTransaction(
+        organization_id=seeded_org["organization"].id,
+        provider="razorpay",
+        gateway_reference=reference,
+        amount=amount,
+        status="paid",
+        receipt_reference="INV/2026/000050",
+    )
+    db_session.add(transaction)
+    db_session.commit()
+    return transaction
+
+
+def test_sale_with_paid_gateway_transaction_is_completed_and_transaction_reserved(client, seeded_org, db_session):
+    _receive_stock(client, seeded_org, quantity=10)
+    transaction = _paid_gateway_transaction(db_session, seeded_org, amount=47.0)
+
+    sale_resp = client.post(
+        "/api/v1/sales",
+        headers=seeded_org["auth_headers"],
+        json={
+            "branch_id": str(seeded_org["branch"].id),
+            "warehouse_id": str(seeded_org["warehouse"].id),
+            "items": [{"product_id": str(seeded_org["product"].id), "quantity": 1}],
+            "payments": [],
+            "payment_gateway_transaction_id": str(transaction.id),
+        },
+    )
+    assert sale_resp.status_code == 201, sale_resp.text
+    invoice = sale_resp.json()
+    assert invoice["grand_total"] == 47.0
+    upi_payments = [p for p in invoice["payments"] if p["method"] == "upi"]
+    assert len(upi_payments) == 1
+    assert upi_payments[0]["amount"] == 47.0
+    assert upi_payments[0]["reference"] == "qr_paid_test"
+
+    db_session.refresh(transaction)
+    assert str(transaction.invoice_id) == invoice["id"]
+
+
+def test_reusing_a_consumed_gateway_transaction_is_rejected(client, seeded_org, db_session):
+    """The FK set on the first sale makes the transaction single-use --
+    a retried or duplicated POST /sales with the same transaction id must
+    not be allowed to pay for a second invoice."""
+    _receive_stock(client, seeded_org, quantity=10)
+    transaction = _paid_gateway_transaction(db_session, seeded_org, amount=47.0)
+
+    first = client.post(
+        "/api/v1/sales",
+        headers=seeded_org["auth_headers"],
+        json={
+            "branch_id": str(seeded_org["branch"].id),
+            "warehouse_id": str(seeded_org["warehouse"].id),
+            "items": [{"product_id": str(seeded_org["product"].id), "quantity": 1}],
+            "payments": [],
+            "payment_gateway_transaction_id": str(transaction.id),
+        },
+    )
+    assert first.status_code == 201, first.text
+
+    second = client.post(
+        "/api/v1/sales",
+        headers=seeded_org["auth_headers"],
+        json={
+            "branch_id": str(seeded_org["branch"].id),
+            "warehouse_id": str(seeded_org["warehouse"].id),
+            "items": [{"product_id": str(seeded_org["product"].id), "quantity": 1}],
+            "payments": [],
+            "payment_gateway_transaction_id": str(transaction.id),
+        },
+    )
+    assert second.status_code == 409, second.text
+
+
+def test_sale_with_unpaid_gateway_transaction_is_rejected(client, seeded_org, db_session):
+    from app.models.payments import PaymentGatewayTransaction
+
+    _receive_stock(client, seeded_org, quantity=10)
+    transaction = PaymentGatewayTransaction(
+        organization_id=seeded_org["organization"].id,
+        provider="razorpay",
+        gateway_reference="qr_not_paid",
+        amount=47.0,
+        status="created",
+        receipt_reference="INV/2026/000051",
+    )
+    db_session.add(transaction)
+    db_session.commit()
+
+    sale_resp = client.post(
+        "/api/v1/sales",
+        headers=seeded_org["auth_headers"],
+        json={
+            "branch_id": str(seeded_org["branch"].id),
+            "warehouse_id": str(seeded_org["warehouse"].id),
+            "items": [{"product_id": str(seeded_org["product"].id), "quantity": 1}],
+            "payments": [],
+            "payment_gateway_transaction_id": str(transaction.id),
+        },
+    )
+    assert sale_resp.status_code == 422, sale_resp.text
+
+
+def test_sale_uses_gateway_transaction_amount_not_client_supplied_amount(client, seeded_org, db_session):
+    """The client cannot inflate what a QR payment is worth: even if the
+    request also carries an (invalid, mismatched) cash tender, the
+    server-derived UPI amount always comes from the transaction row."""
+    _receive_stock(client, seeded_org, quantity=10)
+    transaction = _paid_gateway_transaction(db_session, seeded_org, amount=47.0, reference="qr_amount_test")
+
+    sale_resp = client.post(
+        "/api/v1/sales",
+        headers=seeded_org["auth_headers"],
+        json={
+            "branch_id": str(seeded_org["branch"].id),
+            "warehouse_id": str(seeded_org["warehouse"].id),
+            "items": [{"product_id": str(seeded_org["product"].id), "quantity": 1}],
+            "payments": [{"method": "cash", "amount": 0.01}],
+            "payment_gateway_transaction_id": str(transaction.id),
+        },
+    )
+    assert sale_resp.status_code == 201, sale_resp.text
+    invoice = sale_resp.json()
+    upi_payments = [p for p in invoice["payments"] if p["method"] == "upi"]
+    assert upi_payments[0]["amount"] == 47.0
+
+
 def test_return_reverses_stock_and_computes_refund(client, seeded_org, db_session):
     _receive_stock(client, seeded_org, quantity=100)
 

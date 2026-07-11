@@ -87,3 +87,48 @@ def test_unknown_qr_transaction_status_is_404(client, seeded_org):
 
     resp = client.get(f"/api/v1/payments/razorpay/qr/{uuid.uuid4()}", headers=seeded_org["auth_headers"])
     assert resp.status_code == 404
+
+
+def test_qr_status_expires_lazily_after_close_by(client, seeded_org, db_session):
+    """No background job flips a stale QR to expired -- it happens the
+    next time anyone (here, the status poll) actually reads it."""
+    from datetime import datetime, timedelta, timezone
+
+    from app.models.payments import PaymentGatewayTransaction
+
+    transaction = PaymentGatewayTransaction(
+        organization_id=seeded_org["organization"].id,
+        provider="razorpay",
+        gateway_reference="qr_stale",
+        amount=50.0,
+        status="created",
+        receipt_reference="INV/2026/000099",
+        close_by=datetime.now(timezone.utc) - timedelta(minutes=1),
+    )
+    db_session.add(transaction)
+    db_session.commit()
+
+    resp = client.get(f"/api/v1/payments/razorpay/qr/{transaction.id}", headers=seeded_org["auth_headers"])
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "expired"
+
+
+def test_qr_status_not_expired_before_close_by(client, seeded_org, db_session):
+    from datetime import datetime, timedelta, timezone
+
+    from app.models.payments import PaymentGatewayTransaction
+
+    transaction = PaymentGatewayTransaction(
+        organization_id=seeded_org["organization"].id,
+        provider="razorpay",
+        gateway_reference="qr_fresh",
+        amount=50.0,
+        status="created",
+        receipt_reference="INV/2026/000098",
+        close_by=datetime.now(timezone.utc) + timedelta(minutes=10),
+    )
+    db_session.add(transaction)
+    db_session.commit()
+
+    resp = client.get(f"/api/v1/payments/razorpay/qr/{transaction.id}", headers=seeded_org["auth_headers"])
+    assert resp.json()["status"] == "created"

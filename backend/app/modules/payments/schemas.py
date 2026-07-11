@@ -17,6 +17,13 @@ class PaymentGatewayTransactionResponse(BaseModel):
     status: str
     receipt_reference: str | None
     qr_image_url: str | None
+    close_by: datetime | None
     paid_at: datetime | None
+    invoice_id: uuid.UUID | None
 
     model_config = {"from_attributes": True}
+
+
+class FeatureFlagsResponse(BaseModel):
+    razorpay_upi_enabled: bool
+    printer_enabled: bool
