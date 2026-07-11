@@ -72,10 +72,11 @@ Status: in progress / see commit history for exact state.
       HMAC-SHA256 signature verification via the official SDK. Ships with
       Razorpay *test-mode* keys as safe defaults; swap
       `POS_RAZORPAY_KEY_ID/SECRET/WEBHOOK_SECRET` for live values from
-      the dashboard and it works unchanged. Not yet wired into the POS
-      billing screen UI (backend + webhook are complete and tested; the
-      frontend still only does the manual cash/card/upi/wallet entry
-      built earlier) — say the word if you want that UI next.
+      the dashboard and it works unchanged. Fully wired into the POS
+      billing screen: a feature-flagged "UPI QR" payment mode generates
+      the QR, polls status live, auto-finalizes the sale and prints the
+      receipt the moment payment is confirmed, and handles expiry,
+      cashier cancellation, and connection loss during polling.
 - [x] **SMS (MSG91)**: real Flow API integration
       (`app/modules/notifications/adapters.py`), wired to an actual
       trigger — every completed sale with a customer phone on file
@@ -125,9 +126,7 @@ Status: in progress / see commit history for exact state.
    electronics vs garment) — the generic catalog/batch/serial model covers
    all four reasonably, but medical stores often need drug-schedule
    (H/H1/X) compliance fields; confirm if that's needed.
-2. Whether to wire the Razorpay UPI QR flow into the POS billing screen
-   UI (backend is done and tested).
-3. Real Razorpay/MSG91/GSP credentials, and which specific GSP to
+2. Real Razorpay/MSG91/GSP credentials, and which specific GSP to
    contract with, once you're ready to go live.
-4. Target thermal printer hardware model to validate against for real
+3. Target thermal printer hardware model to validate against for real
    (architecture assumes standard Epson ESC/POS over network, port 9100).
