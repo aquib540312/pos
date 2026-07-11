@@ -48,6 +48,7 @@ class OfflineSaleResult(BaseModel):
     status: Literal["applied", "conflict", "rejected"]
     invoice_id: uuid.UUID | None = None
     conflict_id: uuid.UUID | None = None
+    conflict_type: str | None = None
     error_detail: str | None = None
 
 

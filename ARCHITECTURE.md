@@ -97,22 +97,61 @@ GST is not a flat "tax %" — it's computed per line as:
    GSTR-1/3B reporting — never recompute the split for reports, only read
    the stored values, since rates change over time and reports are historical.
 
-## 5. Offline-first (Phase 2 design note, not yet implemented)
+## 5. Offline-first sync
 
 The POS terminal is the least reliable network node in this system (retail
-counters, patchy connectivity). The plan (not yet built — see ROADMAP.md):
-- Each terminal keeps a local SQLite (via the Electron shell) mirroring the
-  subset of catalog/customer/tax data it needs, and queues sales as an
-  **append-only outbox** of domain events (`SaleCompleted`, `PaymentTaken`)
-  with a client-generated UUID as idempotency key.
-- Sync worker (Celery) drains the outbox against the server API; conflicts on
-  stock are resolved server-side (server is the source of truth for
-  quantities; overselling offline is allowed and reconciled, then flagged for
-  manual review — this matches how real Indian retail counters already work
-  with manual bill books during outages).
-- This requires the sync protocol and conflict-resolution rules to be
-  designed with you (business tolerance for oversell, whether offline sales
-  need manager approval) before implementation — flagged in ROADMAP.md.
+counters, patchy connectivity). Two halves, kept deliberately independent so
+either can be tested and reasoned about on its own:
+
+**Server half** — `app/modules/sync/` (Postgres, part of the main API):
+- `SyncChangeLog` is a single, strictly-ordered table of every
+  create/update/delete of a syncable entity (product, customer, stock_item).
+  Rows are written by a `Session`-level `before_flush` event listener
+  (`app/modules/sync/listeners.py`), not by service code — no existing
+  module had to change to start emitting sync events, and nothing can
+  forget to. The row's own auto-increment `id` doubles as the pull cursor:
+  "give me everything with `id > my_last_cursor`."
+- `SyncTerminal` registers a till with a long-lived API key (not a user
+  JWT — the background worker syncs unattended). `OfflineSaleRecord` is
+  the idempotency ledger for pushed sales: a `(terminal_id,
+  client_operation_id)` unique constraint means a retried push replays the
+  prior outcome instead of double-posting the sale.
+- **Oversell policy: stock quantities may never go negative.** An offline
+  sale is replayed through the exact same `SalesService.create_sale` every
+  online sale uses; if it raises `InsufficientStockError` (or any other
+  domain validation failure), that one sale is rolled back and parked as an
+  open `SyncConflict` for a manager to resolve (retry once restocked, or
+  cancel) — never forced through, and never silently dropped. Each offline
+  sale in a push batch commits independently, so one conflict never blocks
+  or rolls back the rest of the batch.
+
+**Client half** — `sync_agent/` (SQLite, runs on the till itself):
+- Deliberately has zero dependency on `app.*` — it only ever talks to the
+  server through the `SyncTransport` protocol
+  (`sync_agent/domain/transport.py`), so a different backend or wire
+  protocol could implement the same interface without touching this
+  package. `HttpSyncTransport` is the one shipped implementation.
+- Local storage is SQLite encrypted at rest with SQLCipher (AES-256) via
+  `sqlcipher3-binary` — a real passphrase-derived key, not an
+  application-level bolt-on — behind a `ConnectionFactory` seam so the
+  encryption engine itself is swappable.
+- A cashier's sale is enqueued locally and unconditionally (never rejected
+  against the local stock cache, which may be stale — that would defeat
+  the point of working offline). The background worker (`SyncWorker`)
+  pushes the queue and pulls the change log on a configurable interval,
+  with exponential backoff plus a fast-reconnect probe on failure, and
+  survives a crash mid-cycle (a `sync_journal` table records in-flight
+  push/pull attempts; anything still open on startup is simply closed out
+  and retried from scratch next cycle — safe because push is idempotent
+  and pull is cursor-based).
+- **Partial sync correctness**: each entity type (`product`/`customer`/
+  `stock_item`) has its own pull cursor, advanced only by rows of that
+  same type. Pulling just `product` this cycle can never accidentally
+  skip a `customer` change with a lower id — a single shared cursor would
+  have gotten this wrong.
+
+Full detail (config surface, CLI, status dashboard) lives in
+`backend/sync_agent/` and `backend/tests/sync_agent/`.
 
 ## 6. RBAC
 

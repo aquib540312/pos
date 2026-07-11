@@ -171,6 +171,7 @@ class SyncService:
             client_operation_id=sale.client_operation_id,
             status="conflict",
             conflict_id=conflict.id,
+            conflict_type=conflict_type,
             error_detail=message,
         )
 
@@ -260,13 +261,17 @@ class SyncService:
         the case where the client never saw the original response (e.g.
         connection dropped after the server committed) and retries."""
         conflict_id = None
+        conflict_type = None
         if record.status == "conflict":
             conflict = self.conflicts.get_by_offline_sale(record.id)
-            conflict_id = conflict.id if conflict else None
+            if conflict:
+                conflict_id = conflict.id
+                conflict_type = conflict.conflict_type
         return OfflineSaleResult(
             client_operation_id=record.client_operation_id,
             status=record.status,  # type: ignore[arg-type]
             invoice_id=record.invoice_id,
             conflict_id=conflict_id,
+            conflict_type=conflict_type,
             error_detail=record.error_detail,
         )

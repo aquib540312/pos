@@ -103,14 +103,23 @@ Status: in progress / see commit history for exact state.
       adjust to that provider's specific docs. B2B (GSTIN-wise) invoice
       reporting isn't built yet, only B2C-small — see
       `gst_filing/schema_builder.py`.
-- **Offline-first + sync**: design in `ARCHITECTURE.md` §5. Still needs
-  your answer on oversell tolerance and conflict-resolution policy
-  before implementation.
-- **Electron desktop shell**: thin wrapper over the web frontend + local
-  SQLite cache + cash drawer kick (serial/USB). The ESC/POS printing
-  piece is now built and reusable from Electron too (it's just talking
-  to the same printer over the network) — what's left here is
-  specifically the offline cache and drawer-kick integration.
+- [x] **Offline-first + sync**: full bidirectional sync engine. Design in
+  `ARCHITECTURE.md` §5; server half in `app/modules/sync/` (change-log
+  capture, idempotent push, cursor-based pull, conflict dashboard), client
+  half in `sync_agent/` (encrypted-at-rest SQLite via SQLCipher, offline
+  sales queue, background worker with exponential backoff + reconnect
+  detection + crash recovery, CLI). Oversell policy: stock can never go
+  negative — an offline sale that can't be safely applied becomes an open
+  conflict for a manager to retry or cancel, never forced through.
+  153 backend tests passing (40 of them sync-specific, including a real
+  loopback-socket integration test against the actual API).
+- **Electron desktop shell**: thin wrapper over the web frontend + cash
+  drawer kick (serial/USB), now that `sync_agent` provides the offline
+  cache/queue engine itself. The ESC/POS printing piece is also already
+  built and reusable from Electron (it's just talking to the same printer
+  over the network) — what's left here is specifically embedding
+  `sync_agent` as the desktop shell's local data layer and the
+  drawer-kick integration.
 - **React Native mobile**: for supervisor dashboards / handheld barcode
   scanning — confirm this is actually wanted before building it; POS
   billing on a phone is unusual for a retail counter.
