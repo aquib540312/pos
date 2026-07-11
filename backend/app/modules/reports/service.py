@@ -5,17 +5,22 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.accounting import JournalEntry, JournalLine, LedgerAccount
+from app.models.billing import Payment, Shift
 from app.models.catalog import HSNCode, Product
 from app.models.inventory import StockItem
+from app.models.rbac import User
 from app.models.sales import SalesInvoice, SalesInvoiceItem
 from app.modules.gst_filing.schema_builder import B2CSLine
 from app.modules.reports.schemas import (
     BalanceSheetResponse,
+    CashierSalesRow,
     GSTR1LineRow,
     LedgerAccountLine,
+    PaymentMethodBreakdownRow,
     ProfitAndLossResponse,
     SalesSummaryResponse,
     StockSummaryRow,
+    TopProductRow,
 )
 
 
@@ -276,3 +281,83 @@ class ReportService:
             total_equity=total_equity,
             retained_earnings=retained_earnings,
         )
+
+    def top_products(self, organization_id: uuid.UUID, start: date, end: date, limit: int = 10) -> list[TopProductRow]:
+        start_dt = datetime.combine(start, time.min, tzinfo=timezone.utc)
+        end_dt = datetime.combine(end, time.max, tzinfo=timezone.utc)
+        stmt = (
+            select(
+                Product.id,
+                Product.name,
+                Product.sku,
+                func.coalesce(func.sum(SalesInvoiceItem.quantity), 0),
+                func.coalesce(func.sum(SalesInvoiceItem.line_total), 0),
+            )
+            .join(SalesInvoiceItem, SalesInvoiceItem.product_id == Product.id)
+            .join(SalesInvoice, SalesInvoice.id == SalesInvoiceItem.invoice_id)
+            .where(
+                SalesInvoice.organization_id == organization_id,
+                SalesInvoice.status == "posted",
+                SalesInvoice.invoice_date >= start_dt,
+                SalesInvoice.invoice_date <= end_dt,
+            )
+            .group_by(Product.id, Product.name, Product.sku)
+            .order_by(func.coalesce(func.sum(SalesInvoiceItem.line_total), 0).desc())
+            .limit(limit)
+        )
+        return [
+            TopProductRow(product_id=pid, product_name=name, sku=sku, quantity_sold=float(qty), revenue=float(revenue))
+            for pid, name, sku, qty, revenue in self.db.execute(stmt).all()
+        ]
+
+    def payment_method_breakdown(
+        self, organization_id: uuid.UUID, start: date, end: date
+    ) -> list[PaymentMethodBreakdownRow]:
+        start_dt = datetime.combine(start, time.min, tzinfo=timezone.utc)
+        end_dt = datetime.combine(end, time.max, tzinfo=timezone.utc)
+        stmt = (
+            select(Payment.method, func.count(Payment.id), func.coalesce(func.sum(Payment.amount), 0))
+            .join(SalesInvoice, SalesInvoice.id == Payment.invoice_id)
+            .where(
+                SalesInvoice.organization_id == organization_id,
+                SalesInvoice.status == "posted",
+                SalesInvoice.invoice_date >= start_dt,
+                SalesInvoice.invoice_date <= end_dt,
+            )
+            .group_by(Payment.method)
+            .order_by(func.coalesce(func.sum(Payment.amount), 0).desc())
+        )
+        return [
+            PaymentMethodBreakdownRow(method=method, payment_count=count, total_amount=float(total))
+            for method, count, total in self.db.execute(stmt).all()
+        ]
+
+    def sales_by_cashier(self, organization_id: uuid.UUID, start: date, end: date) -> list[CashierSalesRow]:
+        """Only invoices posted within a shift are attributable to a
+        cashier -- a shift-less invoice (e.g. posted outside till
+        operations) has no cashier to credit it to, so it's excluded here
+        rather than lumped under some placeholder."""
+        start_dt = datetime.combine(start, time.min, tzinfo=timezone.utc)
+        end_dt = datetime.combine(end, time.max, tzinfo=timezone.utc)
+        stmt = (
+            select(
+                User.id,
+                User.full_name,
+                func.count(SalesInvoice.id),
+                func.coalesce(func.sum(SalesInvoice.grand_total), 0),
+            )
+            .join(Shift, Shift.id == SalesInvoice.shift_id)
+            .join(User, User.id == Shift.user_id)
+            .where(
+                SalesInvoice.organization_id == organization_id,
+                SalesInvoice.status == "posted",
+                SalesInvoice.invoice_date >= start_dt,
+                SalesInvoice.invoice_date <= end_dt,
+            )
+            .group_by(User.id, User.full_name)
+            .order_by(func.coalesce(func.sum(SalesInvoice.grand_total), 0).desc())
+        )
+        return [
+            CashierSalesRow(user_id=uid, user_name=name, invoice_count=count, total_grand_total=float(total))
+            for uid, name, count, total in self.db.execute(stmt).all()
+        ]

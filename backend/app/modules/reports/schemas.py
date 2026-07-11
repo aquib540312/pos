@@ -61,3 +61,24 @@ class BalanceSheetResponse(BaseModel):
     total_liabilities: float
     total_equity: float
     retained_earnings: float
+
+
+class TopProductRow(BaseModel):
+    product_id: uuid.UUID
+    product_name: str
+    sku: str
+    quantity_sold: float
+    revenue: float
+
+
+class PaymentMethodBreakdownRow(BaseModel):
+    method: str
+    payment_count: int
+    total_amount: float
+
+
+class CashierSalesRow(BaseModel):
+    user_id: uuid.UUID
+    user_name: str
+    invoice_count: int
+    total_grand_total: float

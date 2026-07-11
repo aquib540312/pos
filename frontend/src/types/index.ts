@@ -119,6 +119,86 @@ export interface SyncConflict {
   resolved_at: string | null
 }
 
+export interface SalesSummaryReport {
+  period_start: string
+  period_end: string
+  invoice_count: number
+  total_taxable_value: number
+  total_cgst: number
+  total_sgst: number
+  total_igst: number
+  total_cess: number
+  total_grand_total: number
+}
+
+export interface StockSummaryReportRow {
+  product_id: string
+  product_name: string
+  sku: string
+  quantity_on_hand: number
+  reorder_level: number
+  below_reorder: boolean
+}
+
+export interface GSTR1ReportRow {
+  hsn_code: string
+  tax_rate_percent: number
+  taxable_value: number
+  cgst: number
+  sgst: number
+  igst: number
+  cess: number
+  invoice_count: number
+}
+
+export interface LedgerAccountLine {
+  account_code: string
+  account_name: string
+  amount: number
+}
+
+export interface ProfitAndLossReport {
+  period_start: string
+  period_end: string
+  income_lines: LedgerAccountLine[]
+  expense_lines: LedgerAccountLine[]
+  total_income: number
+  total_expense: number
+  net_profit: number
+}
+
+export interface BalanceSheetReport {
+  as_of: string
+  asset_lines: LedgerAccountLine[]
+  liability_lines: LedgerAccountLine[]
+  equity_lines: LedgerAccountLine[]
+  total_assets: number
+  total_liabilities: number
+  total_equity: number
+  retained_earnings: number
+}
+
+export interface TopProductReportRow {
+  product_id: string
+  product_name: string
+  sku: string
+  quantity_sold: number
+  revenue: number
+}
+
+export interface PaymentBreakdownReportRow {
+  method: string
+  payment_count: number
+  total_amount: number
+}
+
+export interface CashierSalesReportRow {
+  user_id: string
+  user_name: string
+  invoice_count: number
+  total_grand_total: number
+}
+
 export interface SaleInvoice {
   id: string
   invoice_number: string

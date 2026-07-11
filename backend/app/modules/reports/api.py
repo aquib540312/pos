@@ -9,10 +9,13 @@ from app.db.session import get_db
 from app.models.rbac import User
 from app.modules.reports.schemas import (
     BalanceSheetResponse,
+    CashierSalesRow,
     GSTR1LineRow,
+    PaymentMethodBreakdownRow,
     ProfitAndLossResponse,
     SalesSummaryResponse,
     StockSummaryRow,
+    TopProductRow,
 )
 from app.modules.reports.service import ReportService
 
@@ -61,3 +64,34 @@ def balance_sheet(
     user: User = Depends(require_permission(Perm.REPORTS_VIEW)),
 ):
     return ReportService(db).balance_sheet(user.organization_id, as_of)
+
+
+@router.get("/top-products", response_model=list[TopProductRow])
+def top_products(
+    start: date = Query(...),
+    end: date = Query(...),
+    limit: int = Query(default=10, ge=1, le=100),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission(Perm.REPORTS_VIEW)),
+):
+    return ReportService(db).top_products(user.organization_id, start, end, limit)
+
+
+@router.get("/payment-breakdown", response_model=list[PaymentMethodBreakdownRow])
+def payment_breakdown(
+    start: date = Query(...),
+    end: date = Query(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission(Perm.REPORTS_VIEW)),
+):
+    return ReportService(db).payment_method_breakdown(user.organization_id, start, end)
+
+
+@router.get("/sales-by-cashier", response_model=list[CashierSalesRow])
+def sales_by_cashier(
+    start: date = Query(...),
+    end: date = Query(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission(Perm.REPORTS_VIEW)),
+):
+    return ReportService(db).sales_by_cashier(user.organization_id, start, end)
