@@ -2,10 +2,10 @@ import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.models.catalog import ProductBatch
-from app.models.inventory import StockItem, StockLedgerEntry
+from app.models.inventory import StockItem, StockLedgerEntry, StockTransfer
 
 
 class StockRepository:
@@ -93,3 +93,25 @@ class StockRepository:
         self.db.add(entry)
         self.db.flush()
         return entry
+
+
+class StockTransferRepository:
+    def __init__(self, db: Session):
+        self.db = db
+
+    def add(self, transfer: StockTransfer) -> StockTransfer:
+        self.db.add(transfer)
+        self.db.flush()
+        return transfer
+
+    def get(self, transfer_id: uuid.UUID) -> StockTransfer | None:
+        stmt = select(StockTransfer).where(StockTransfer.id == transfer_id).options(selectinload(StockTransfer.items))
+        return self.db.execute(stmt).scalars().first()
+
+    def list(self, organization_id: uuid.UUID) -> list[StockTransfer]:
+        stmt = (
+            select(StockTransfer)
+            .where(StockTransfer.organization_id == organization_id)
+            .options(selectinload(StockTransfer.items))
+        )
+        return list(self.db.execute(stmt).scalars())
