@@ -92,6 +92,33 @@ export interface FeatureFlags {
   printer_enabled: boolean
 }
 
+export interface SyncTerminalStatus {
+  id: string
+  name: string
+  branch_id: string
+  is_active: boolean
+  last_seen_at: string | null
+}
+
+export interface SyncStatus {
+  terminals: SyncTerminalStatus[]
+  open_conflicts: number
+  latest_change_log_id: number
+}
+
+export interface SyncConflict {
+  id: string
+  terminal_id: string
+  offline_sale_id: string | null
+  conflict_type: string
+  details: Record<string, unknown>
+  status: string
+  resolution: string | null
+  resolution_notes: string | null
+  created_at: string
+  resolved_at: string | null
+}
+
 export interface SaleInvoice {
   id: string
   invoice_number: string

@@ -6,6 +6,7 @@ import DashboardPage from './pages/DashboardPage'
 import ProductsPage from './pages/ProductsPage'
 import CustomersPage from './pages/CustomersPage'
 import POSPage from './pages/POSPage'
+import SyncDashboardPage from './pages/SyncDashboardPage'
 
 export default function App() {
   return (
@@ -18,6 +19,7 @@ export default function App() {
             <Route path="/pos" element={<POSPage />} />
             <Route path="/products" element={<ProductsPage />} />
             <Route path="/customers" element={<CustomersPage />} />
+            <Route path="/sync" element={<SyncDashboardPage />} />
           </Route>
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

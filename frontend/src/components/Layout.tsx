@@ -6,6 +6,7 @@ const NAV_ITEMS = [
   { to: '/pos', label: 'Billing (POS)' },
   { to: '/products', label: 'Products' },
   { to: '/customers', label: 'Customers' },
+  { to: '/sync', label: 'Sync Status' },
 ]
 
 export default function Layout() {
