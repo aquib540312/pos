@@ -16,6 +16,20 @@
 #         notice). Upgrade pos-backend's plan when that's not acceptable.
 #     Neither limit blocks trying the whole system for real first -- just
 #     don't build a business on the free tier long-term without upgrading.
+#   - Render's free workspace plan does not support background worker
+#     services at all (confirmed live: "service type is not available for
+#     this plan"), so there is deliberately no pos-celery-worker service
+#     below. The only thing that costs you: receipt SMS and print-job
+#     dispatch are queued to Redis (via .delay()) but never picked up and
+#     processed, since nothing is running to consume that queue -- they
+#     fail silently by design (never blocks checkout), so this is a
+#     missing feature, not a bug, on the free plan. Billing, inventory,
+#     GST, and reports are unaffected. Add the worker back (copy the
+#     pos-backend service block, change `type: web` to `type: worker`,
+#     drop `healthCheckPath`, add `dockerCommand: celery -A
+#     app.celery_app:celery_app worker --loglevel=info` and
+#     `SKIP_MIGRATIONS: "true"`) once your Render workspace is on a paid
+#     plan.
 #   - Every *_KEY / *_SECRET below is a safe mock/test default (same ones
 #     used in local dev). UPI QR payments, SMS receipts, and GST e-filing
 #     will not actually reach Razorpay/MSG91/a real GSP until you replace
@@ -86,53 +100,6 @@ services:
       - key: POS_PRINTER_ENABLED
         value: "false"
       # GST e-filing -- "mock" by default (see ARCHITECTURE.md #9).
-      - key: POS_GSP_PROVIDER
-        value: mock
-      - key: POS_GSP_BASE_URL
-        value: https://sandbox.example-gsp.invalid
-      - key: POS_GSP_API_KEY
-        value: mock-gsp-api-key
-
-  - type: worker
-    name: pos-celery-worker
-    runtime: docker
-    dockerfilePath: ./backend/Dockerfile
-    dockerContext: ./backend
-    dockerCommand: celery -A app.celery_app:celery_app worker --loglevel=info
-    plan: free
-    envVars:
-      - key: SKIP_MIGRATIONS
-        value: "true" # pos-backend already runs migrations on boot -- avoids two containers racing to migrate at once
-      - key: POS_DATABASE_URL
-        fromDatabase:
-          name: pos-db
-          property: connectionString
-      - key: POS_REDIS_URL
-        fromService:
-          type: keyvalue
-          name: pos-redis
-          property: connectionString
-      # No POS_SECRET_KEY here on purpose: it defaults safely
-      # (app/core/config.py) and the worker never verifies JWTs, so it
-      # doesn't need to match pos-backend's generated value.
-      - key: POS_RAZORPAY_KEY_ID
-        value: rzp_test_0000000000000
-      - key: POS_RAZORPAY_KEY_SECRET
-        value: test_secret_change_me
-      - key: POS_RAZORPAY_WEBHOOK_SECRET
-        value: test_webhook_secret_change_me
-      - key: POS_MSG91_AUTH_KEY
-        value: ""
-      - key: POS_MSG91_SENDER_ID
-        value: POSAPP
-      - key: POS_MSG91_FLOW_ID
-        value: ""
-      - key: POS_PRINTER_HOST
-        value: 192.168.1.100
-      - key: POS_PRINTER_PORT
-        value: "9100"
-      - key: POS_PRINTER_ENABLED
-        value: "false"
       - key: POS_GSP_PROVIDER
         value: mock
       - key: POS_GSP_BASE_URL
