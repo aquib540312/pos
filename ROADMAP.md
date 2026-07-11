@@ -39,9 +39,16 @@ Status: in progress / see commit history for exact state.
       labels" action on the Products page opens the sheet in a new tab and
       triggers the browser print dialog. Direct thermal label-printer
       (ZPL) output is still Phase 3 — needs your target hardware model.
-- Combo product rule engine (currently: basic percentage/flat discounts and
-  manual combo price only; a full rule DSL — "buy 2 get 1", tiered slabs —
-  needs your priority ranking of which promo types matter first).
+- [x] Combo/bundle products: a combo bills as one line at its own price/HSN
+      (like any product), but selling or returning it moves stock on its
+      *components* instead — scaled by each component's quantity — since
+      the combo SKU itself never carries stock. Nesting a combo inside
+      another combo is rejected. Design decision made without further
+      input, since it directly implements "Combo Products" from the
+      original brief the same way Indian retail already prices bundles
+      (one MRP on the pack). A full promo rule DSL ("buy 2 get 1", tiered
+      slabs, auto-detected combos at checkout) is a separate, larger
+      feature — this covers pre-defined combo SKUs only.
 - GSTR-1/3B **filing** integration — requires a GSP (GST Suvidha Provider)
   API account and credentials from you; today we generate the correct
   line-level data, not the government-format JSON/upload.

@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.core.exceptions import NotFoundError, ValidationError
 from app.core.numbering import next_document_number
 from app.models.billing import Payment
+from app.models.catalog import Product
 from app.models.organization import Branch
 from app.models.sales import SalesInvoice, SalesInvoiceItem, SalesReturn, SalesReturnItem
 from app.modules.accounting.service import AccountingService
@@ -36,6 +37,54 @@ class SalesService:
         self.loyalty = LoyaltyService(db)
         self.party = PartyService(db)
         self.accounting = AccountingService(db)
+
+    def _issue_stock_for_sale_line(
+        self, organization_id: uuid.UUID, warehouse_id: uuid.UUID, product: Product, quantity: float, invoice_id: uuid.UUID
+    ) -> uuid.UUID | None:
+        """A combo product has no stock of its own (see catalog Product docs
+        for why) -- selling it issues each component's stock instead,
+        scaled by the component's own quantity. There's no single
+        "primary batch" for a combo line (it may draw from several
+        different products' batches), so the invoice line's batch_id is
+        left null for combo lines."""
+        if not product.is_combo:
+            allocations = self.inventory.issue_fefo(
+                organization_id, warehouse_id, product.id, quantity, "sale", "sales_invoice", invoice_id
+            )
+            return allocations[0][0] if allocations else None
+
+        for component in product.combo_components:
+            self.inventory.issue_fefo(
+                organization_id, warehouse_id, component.component_product_id, quantity * float(component.quantity),
+                "sale", "sales_invoice", invoice_id,
+            )
+        return None
+
+    def _receive_stock_for_return_line(
+        self,
+        organization_id: uuid.UUID,
+        warehouse_id: uuid.UUID,
+        product_id: uuid.UUID,
+        batch_id: uuid.UUID | None,
+        quantity: float,
+        sales_return_id: uuid.UUID,
+    ) -> None:
+        """Mirror of `_issue_stock_for_sale_line` for returns: a returned
+        combo line restores stock to each component (scaled by the
+        component's quantity), never to the combo product itself, which
+        never carries stock."""
+        product = self.products.get(product_id)
+        if product is not None and product.is_combo:
+            for component in product.combo_components:
+                self.inventory.receive(
+                    organization_id, warehouse_id, component.component_product_id, None,
+                    quantity * float(component.quantity), "sale_return", "sales_return", sales_return_id,
+                )
+        else:
+            self.inventory.receive(
+                organization_id, warehouse_id, product_id, batch_id, quantity, "sale_return", "sales_return",
+                sales_return_id,
+            )
 
     def create_sale(
         self,
@@ -101,10 +150,9 @@ class SalesService:
             except ValueError as exc:
                 raise ValidationError(f"Invalid line for product '{product.name}': {exc}") from exc
 
-            allocations = self.inventory.issue_fefo(
-                organization_id, warehouse_id, product.id, line["quantity"], "sale", "sales_invoice", invoice.id
+            primary_batch_id = self._issue_stock_for_sale_line(
+                organization_id, warehouse_id, product, line["quantity"], invoice.id
             )
-            primary_batch_id = allocations[0][0] if allocations else None
 
             self.invoices.add_item(
                 SalesInvoiceItem(
@@ -234,9 +282,9 @@ class SalesService:
             igst = round(float(original_item.igst_amount) * fraction, 2)
             line_total = round(taxable_value + cgst + sgst + igst, 2)
 
-            self.inventory.receive(
+            self._receive_stock_for_return_line(
                 organization_id, warehouse_id, original_item.product_id, original_item.batch_id, line["quantity"],
-                "sale_return", "sales_return", sales_return.id,
+                sales_return.id,
             )
 
             self.db.add(

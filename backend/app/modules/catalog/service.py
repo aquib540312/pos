@@ -3,8 +3,8 @@ from datetime import date
 
 from sqlalchemy.orm import Session
 
-from app.core.exceptions import ConflictError, NotFoundError
-from app.models.catalog import Category, HSNCode, Product, TaxRate, UnitOfMeasure
+from app.core.exceptions import ConflictError, NotFoundError, ValidationError
+from app.models.catalog import Category, ComboComponent, HSNCode, Product, TaxRate, UnitOfMeasure
 from app.modules.catalog.repository import CategoryRepository, HSNRepository, ProductRepository, UOMRepository
 
 
@@ -49,10 +49,40 @@ class CatalogService:
         return float(rate.rate_percent) if rate else None
 
     def create_product(self, organization_id: uuid.UUID, **fields) -> Product:
+        """A combo product bills as a single line at its own price/HSN --
+        exactly like a normal product -- but has no stock of its own. See
+        sales/service.py: selling/returning a combo line decrements/
+        restores each *component's* stock instead, scaled by
+        `component.quantity`. Nesting combos inside combos is rejected to
+        keep that stock math a single level deep."""
         if self.products.get_by_sku(organization_id, fields["sku"]) is not None:
             raise ConflictError(f"SKU '{fields['sku']}' already exists")
+
+        combo_components = fields.pop("combo_components", []) or []
+        is_combo = fields.get("is_combo", False)
+        if is_combo and not combo_components:
+            raise ValidationError("A combo product must have at least one component")
+        if not is_combo and combo_components:
+            raise ValidationError("combo_components can only be set when is_combo is true")
+
         product = Product(organization_id=organization_id, **fields)
-        return self.products.add(product)
+        self.products.add(product)
+
+        for comp in combo_components:
+            component = self.products.get(comp["component_product_id"])
+            if component is None:
+                raise NotFoundError(f"Component product {comp['component_product_id']} not found")
+            if component.is_combo:
+                raise ValidationError("A combo product cannot contain another combo product as a component")
+            self.db.add(
+                ComboComponent(
+                    combo_product_id=product.id,
+                    component_product_id=component.id,
+                    quantity=comp["quantity"],
+                )
+            )
+        self.db.flush()
+        return product
 
     def get_product_or_404(self, product_id: uuid.UUID) -> Product:
         product = self.products.get(product_id)

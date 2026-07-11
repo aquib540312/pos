@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.core.deps import require_permission
-from app.core.exceptions import ConflictError, NotFoundError
+from app.core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.core.permissions import Perm
 from app.db.session import get_db
 from app.models.catalog import Product
@@ -18,6 +18,7 @@ from app.modules.catalog.labels import (
 from app.modules.catalog.schemas import (
     CategoryCreateRequest,
     CategoryResponse,
+    ComboComponentResponse,
     HSNCreateRequest,
     HSNResponse,
     ProductCreateRequest,
@@ -44,6 +45,15 @@ def _to_product_response(service: CatalogService, product: Product) -> ProductRe
         tracks_serials=product.tracks_serials,
         tracks_expiry=product.tracks_expiry,
         is_active=product.is_active,
+        is_combo=product.is_combo,
+        combo_components=[
+            ComboComponentResponse(
+                component_product_id=c.component_product_id,
+                component_product_name=c.component_product.name,
+                quantity=c.quantity,
+            )
+            for c in product.combo_components
+        ],
     )
 
 
@@ -166,6 +176,10 @@ def create_product(
     except ConflictError as exc:
         db.rollback()
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    except (ValidationError, NotFoundError) as exc:
+        db.rollback()
+        code = status.HTTP_404_NOT_FOUND if isinstance(exc, NotFoundError) else status.HTTP_422_UNPROCESSABLE_ENTITY
+        raise HTTPException(code, str(exc)) from exc
     return _to_product_response(service, product)
 
 

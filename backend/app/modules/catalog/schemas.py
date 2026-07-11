@@ -49,6 +49,11 @@ class HSNResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ComboComponentRequest(BaseModel):
+    component_product_id: uuid.UUID
+    quantity: float = Field(gt=0, default=1)
+
+
 class ProductCreateRequest(BaseModel):
     sku: str = Field(min_length=1, max_length=64)
     barcode: str | None = None
@@ -64,6 +69,16 @@ class ProductCreateRequest(BaseModel):
     tracks_serials: bool = False
     tracks_expiry: bool = False
     reorder_level: float = Field(ge=0, default=0)
+    is_combo: bool = False
+    combo_components: list[ComboComponentRequest] = Field(default_factory=list)
+
+
+class ComboComponentResponse(BaseModel):
+    component_product_id: uuid.UUID
+    component_product_name: str
+    quantity: float
+
+    model_config = {"from_attributes": True}
 
 
 class ProductResponse(BaseModel):
@@ -79,5 +94,7 @@ class ProductResponse(BaseModel):
     tracks_serials: bool
     tracks_expiry: bool
     is_active: bool
+    is_combo: bool
+    combo_components: list[ComboComponentResponse] = Field(default_factory=list)
 
     model_config = {"from_attributes": True}
