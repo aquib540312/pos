@@ -74,6 +74,24 @@ export interface PaymentResponse {
   reference: string | null
 }
 
+export interface PaymentGatewayTransaction {
+  id: string
+  provider: string
+  gateway_reference: string
+  amount: number
+  status: 'created' | 'paid' | 'closed' | 'expired'
+  receipt_reference: string | null
+  qr_image_url: string | null
+  close_by: string | null
+  paid_at: string | null
+  invoice_id: string | null
+}
+
+export interface FeatureFlags {
+  razorpay_upi_enabled: boolean
+  printer_enabled: boolean
+}
+
 export interface SaleInvoice {
   id: string
   invoice_number: string

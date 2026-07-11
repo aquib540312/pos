@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { apiClient, apiErrorMessage } from '../api/client'
-import type { CartLine, Customer, PaymentLine, Product, SaleInvoice } from '../types'
+import UpiQrPanel from '../components/UpiQrPanel'
+import type { CartLine, Customer, FeatureFlags, PaymentGatewayTransaction, PaymentLine, Product, SaleInvoice } from '../types'
 
 interface Warehouse {
   id: string
@@ -42,7 +43,16 @@ export default function POSPage() {
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [completedInvoice, setCompletedInvoice] = useState<SaleInvoice | null>(null)
+  const [autoPrint, setAutoPrint] = useState(false)
   const barcodeRef = useRef<HTMLInputElement>(null)
+
+  const [features, setFeatures] = useState<FeatureFlags | null>(null)
+  const [payMode, setPayMode] = useState<'manual' | 'upi_qr'>('manual')
+  const [saleSessionId, setSaleSessionId] = useState(0)
+  // Guards against the UPI panel's onPaid firing more than once (e.g. a
+  // stray extra poll tick) from ever resulting in two POST /sales calls
+  // for the same paid transaction.
+  const finalizingRef = useRef(false)
 
   const [couponCodeInput, setCouponCodeInput] = useState('')
   const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discount: number } | null>(null)
@@ -53,6 +63,7 @@ export default function POSPage() {
 
   useEffect(() => {
     apiClient.get<Branch[]>('/org/branches').then((res) => setBranch(res.data[0] ?? null))
+    apiClient.get<FeatureFlags>('/org/features').then((res) => setFeatures(res.data)).catch(() => setFeatures(null))
     barcodeRef.current?.focus()
   }, [])
 
@@ -111,6 +122,11 @@ export default function POSPage() {
 
   const paymentTotal = payments.reduce((sum, p) => sum + (Number.isFinite(p.amount) ? p.amount : 0), 0)
   const balanceDue = Math.max(0, estimate.grandTotalEstimate - paymentTotal)
+  const upiAmount = Math.max(0, estimate.grandTotalEstimate - (giftCardAmount || 0))
+  // Ties the QR's advisory receipt_reference to the current bill in
+  // progress, not to any prior completed sale -- regenerated whenever a
+  // sale finishes (resetForNewSale bumps saleSessionId).
+  const receiptReference = useMemo(() => `POS-${saleSessionId}-${Date.now()}`, [saleSessionId])
 
   async function searchProducts(q: string) {
     setBarcodeInput(q)
@@ -169,7 +185,21 @@ export default function POSPage() {
     setPayments((prev) => prev.map((p, i) => (i === index ? { ...p, ...patch } : p)))
   }
 
-  async function completeSale() {
+  function resetForNewSale() {
+    setCart([])
+    setCustomer(null)
+    setIsCreditSale(false)
+    setPayments([{ method: 'cash', amount: 0 }])
+    setCouponCodeInput('')
+    setAppliedCoupon(null)
+    setCouponError(null)
+    setGiftCardNumber('')
+    setGiftCardAmount(0)
+    setPayMode('manual')
+    setSaleSessionId((id) => id + 1)
+  }
+
+  async function submitSale(gatewayTransactionId?: string) {
     if (!branch || !warehouse) {
       setError('No branch/warehouse configured.')
       return
@@ -191,21 +221,15 @@ export default function POSPage() {
           quantity: l.quantity,
           discount_amount: l.discountAmount,
         })),
-        payments: isCreditSale ? [] : payments.filter((p) => p.amount > 0),
+        payments: isCreditSale || gatewayTransactionId ? [] : payments.filter((p) => p.amount > 0),
         coupon_code: appliedCoupon?.code ?? null,
         gift_card_number: giftCardNumber || null,
         gift_card_amount: giftCardNumber ? giftCardAmount : 0,
+        payment_gateway_transaction_id: gatewayTransactionId ?? null,
       })
       setCompletedInvoice(res.data)
-      setCart([])
-      setCustomer(null)
-      setIsCreditSale(false)
-      setPayments([{ method: 'cash', amount: 0 }])
-      setCouponCodeInput('')
-      setAppliedCoupon(null)
-      setCouponError(null)
-      setGiftCardNumber('')
-      setGiftCardAmount(0)
+      setAutoPrint(Boolean(gatewayTransactionId))
+      resetForNewSale()
     } catch (err) {
       setError(apiErrorMessage(err))
     } finally {
@@ -213,8 +237,31 @@ export default function POSPage() {
     }
   }
 
+  function completeSale() {
+    return submitSale()
+  }
+
+  async function finalizeWithGatewayTransaction(transaction: PaymentGatewayTransaction) {
+    if (finalizingRef.current) return
+    finalizingRef.current = true
+    try {
+      await submitSale(transaction.id)
+    } finally {
+      finalizingRef.current = false
+    }
+  }
+
   if (completedInvoice) {
-    return <Receipt invoice={completedInvoice} onNewSale={() => setCompletedInvoice(null)} />
+    return (
+      <Receipt
+        invoice={completedInvoice}
+        autoPrint={autoPrint}
+        onNewSale={() => {
+          setCompletedInvoice(null)
+          setAutoPrint(false)
+        }}
+      />
+    )
   }
 
   return (
@@ -428,57 +475,110 @@ export default function POSPage() {
 
         {!isCreditSale && (
           <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-800">
-            <h2 className="mb-2 text-sm font-semibold text-slate-700 dark:text-slate-300">Payment</h2>
-            {payments.map((p, i) => (
-              <div key={i} className="mb-2 flex gap-2">
-                <select
-                  value={p.method}
-                  onChange={(e) => updatePayment(i, { method: e.target.value as PaymentLine['method'] })}
-                  className="rounded-lg border border-slate-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-700"
+            <div className="mb-2 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Payment</h2>
+              {features?.razorpay_upi_enabled && (
+                <div className="flex overflow-hidden rounded-lg border border-slate-300 text-xs dark:border-slate-600">
+                  <button
+                    onClick={() => setPayMode('manual')}
+                    className={`px-2 py-1 ${payMode === 'manual' ? 'bg-slate-800 text-white' : 'text-slate-500'}`}
+                  >
+                    Manual
+                  </button>
+                  <button
+                    onClick={() => setPayMode('upi_qr')}
+                    className={`px-2 py-1 ${payMode === 'upi_qr' ? 'bg-slate-800 text-white' : 'text-slate-500'}`}
+                  >
+                    UPI QR
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {payMode === 'manual' ? (
+              <>
+                {payments.map((p, i) => (
+                  <div key={i} className="mb-2 flex gap-2">
+                    <select
+                      value={p.method}
+                      onChange={(e) => updatePayment(i, { method: e.target.value as PaymentLine['method'] })}
+                      className="rounded-lg border border-slate-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-700"
+                    >
+                      {PAYMENT_METHODS.map((m) => (
+                        <option key={m} value={m}>{m.toUpperCase()}</option>
+                      ))}
+                    </select>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={p.amount || ''}
+                      onChange={(e) => updatePayment(i, { amount: Number(e.target.value) })}
+                      className="w-24 rounded-lg border border-slate-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-700"
+                    />
+                    {payments.length > 1 && (
+                      <button onClick={() => setPayments((prev) => prev.filter((_, idx) => idx !== i))} className="text-red-500">✕</button>
+                    )}
+                  </div>
+                ))}
+                <button
+                  onClick={() => setPayments((prev) => [...prev, { method: 'cash', amount: 0 }])}
+                  className="text-sm font-medium text-indigo-600 hover:text-indigo-500"
                 >
-                  {PAYMENT_METHODS.map((m) => (
-                    <option key={m} value={m}>{m.toUpperCase()}</option>
-                  ))}
-                </select>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={p.amount || ''}
-                  onChange={(e) => updatePayment(i, { amount: Number(e.target.value) })}
-                  className="w-24 rounded-lg border border-slate-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-700"
-                />
-                {payments.length > 1 && (
-                  <button onClick={() => setPayments((prev) => prev.filter((_, idx) => idx !== i))} className="text-red-500">✕</button>
-                )}
-              </div>
-            ))}
-            <button
-              onClick={() => setPayments((prev) => [...prev, { method: 'cash', amount: 0 }])}
-              className="text-sm font-medium text-indigo-600 hover:text-indigo-500"
-            >
-              + Add payment method
-            </button>
-            <p className={`mt-2 text-sm ${balanceDue > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
-              {balanceDue > 0 ? `Balance due: ₹${balanceDue.toFixed(2)}` : 'Fully paid'}
-            </p>
+                  + Add payment method
+                </button>
+                <p className={`mt-2 text-sm ${balanceDue > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                  {balanceDue > 0 ? `Balance due: ₹${balanceDue.toFixed(2)}` : 'Fully paid'}
+                </p>
+              </>
+            ) : (
+              <UpiQrPanel
+                amount={upiAmount}
+                receiptReference={receiptReference}
+                disabled={cart.length === 0 || upiAmount <= 0}
+                onPaid={finalizeWithGatewayTransaction}
+              />
+            )}
           </div>
         )}
 
         {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
-        <button
-          onClick={completeSale}
-          disabled={submitting || cart.length === 0}
-          className="w-full rounded-lg bg-emerald-600 px-4 py-3 text-base font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
-        >
-          {submitting ? 'Processing...' : 'Complete Sale'}
-        </button>
+        {(isCreditSale || payMode === 'manual') && (
+          <button
+            onClick={completeSale}
+            disabled={submitting || cart.length === 0}
+            className="w-full rounded-lg bg-emerald-600 px-4 py-3 text-base font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+          >
+            {submitting ? 'Processing...' : 'Complete Sale'}
+          </button>
+        )}
       </div>
     </div>
   )
 }
 
-function Receipt({ invoice, onNewSale }: { invoice: SaleInvoice; onNewSale: () => void }) {
+function Receipt({
+  invoice,
+  onNewSale,
+  autoPrint,
+}: {
+  invoice: SaleInvoice
+  onNewSale: () => void
+  autoPrint?: boolean
+}) {
+  // A UPI QR sale is confirmed with nobody's hand on the mouse -- printing
+  // must happen automatically instead of waiting for a cashier click. The
+  // ref guard keeps this to a single print even under React StrictMode's
+  // dev-mode double-invoke of effects.
+  const printedRef = useRef(false)
+  useEffect(() => {
+    if (autoPrint && !printedRef.current) {
+      printedRef.current = true
+      window.print()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   return (
     <div className="mx-auto max-w-md">
       <div className="mb-4 flex justify-end gap-2 print:hidden">
