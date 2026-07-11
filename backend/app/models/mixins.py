@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, func
+from sqlalchemy import BigInteger, DateTime, ForeignKey, Integer, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, MappedColumn, mapped_column
 from sqlalchemy.types import CHAR, TypeDecorator
@@ -38,6 +38,27 @@ class GUID(TypeDecorator):
         if isinstance(value, uuid.UUID):
             return value
         return uuid.UUID(str(value))
+
+
+class PortableBigInteger(TypeDecorator):
+    """A BigInteger primary key that also auto-increments on SQLite.
+
+    SQLite only aliases a primary key column to its 64-bit ROWID (and
+    thus auto-populates it) when the column's declared type has *exactly*
+    `Integer` affinity -- a genuine `BigInteger` column doesn't qualify,
+    so it would be left NULL on insert. Postgres has no such restriction
+    (BIGSERIAL/IDENTITY works regardless), so only the SQLite side needs
+    to downgrade to `Integer` -- SQLite's storage is 64-bit either way
+    thanks to manifest typing, so nothing is actually truncated.
+    """
+
+    impl = BigInteger
+    cache_ok = True
+
+    def load_dialect_impl(self, dialect):
+        if dialect.name == "sqlite":
+            return dialect.type_descriptor(Integer())
+        return dialect.type_descriptor(BigInteger())
 
 
 class UUIDPKMixin:

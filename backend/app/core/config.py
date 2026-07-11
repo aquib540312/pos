@@ -58,6 +58,13 @@ class Settings(BaseSettings):
     gsp_base_url: str = "https://sandbox.example-gsp.invalid"
     gsp_api_key: str = "mock-gsp-api-key"
 
+    # -- Offline-first sync (server side) ------------------------------
+    # Max change-log rows / offline sales returned or accepted per
+    # push/pull call -- keeps a single request bounded regardless of how
+    # large a terminal's backlog has grown after an extended outage.
+    sync_pull_page_size: int = 500
+    sync_push_max_batch_size: int = 200
+
 
 @lru_cache
 def get_settings() -> Settings:

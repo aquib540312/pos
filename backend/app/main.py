@@ -18,6 +18,7 @@ from app.modules.purchasing.api import router as purchasing_router
 from app.modules.rbac.api import router as rbac_router
 from app.modules.reports.api import router as reports_router
 from app.modules.sales.api import router as sales_router
+from app.modules.sync.api import router as sync_router
 
 settings = get_settings()
 
@@ -48,6 +49,7 @@ for router in (
     printing_router,
     gst_filing_router,
     audit_router,
+    sync_router,
 ):
     app.include_router(router)
 
