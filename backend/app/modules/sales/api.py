@@ -73,6 +73,9 @@ def create_sale(
             payments=[p.model_dump() for p in payload.payments],
             redeem_loyalty_points=payload.redeem_loyalty_points,
             is_credit_sale=payload.is_credit_sale,
+            coupon_code=payload.coupon_code,
+            gift_card_number=payload.gift_card_number,
+            gift_card_amount=payload.gift_card_amount,
         )
         db.commit()
     except DomainError as exc:

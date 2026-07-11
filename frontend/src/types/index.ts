@@ -94,6 +94,8 @@ export interface SaleInvoice {
   status: string
   loyalty_points_earned: number
   loyalty_points_redeemed: number
+  coupon_code: string | null
+  coupon_discount_amount: number
   items: SaleInvoiceItem[]
   payments: PaymentResponse[]
 }

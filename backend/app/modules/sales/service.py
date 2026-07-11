@@ -13,7 +13,7 @@ from app.modules.accounting.service import AccountingService
 from app.modules.catalog.repository import HSNRepository, ProductRepository
 from app.modules.gst.service import compute_line_tax, is_inter_state_supply, round_invoice_total
 from app.modules.inventory.service import InventoryService
-from app.modules.loyalty.service import LoyaltyService
+from app.modules.loyalty.service import CouponService, GiftCardService, LoyaltyService
 from app.modules.party.repository import CustomerRepository
 from app.modules.party.service import PartyService
 from app.modules.sales.repository import SalesInvoiceRepository, SalesReturnRepository
@@ -35,6 +35,8 @@ class SalesService:
         self.customers = CustomerRepository(db)
         self.inventory = InventoryService(db)
         self.loyalty = LoyaltyService(db)
+        self.coupons = CouponService(db)
+        self.gift_cards = GiftCardService(db)
         self.party = PartyService(db)
         self.accounting = AccountingService(db)
 
@@ -97,6 +99,9 @@ class SalesService:
         payments: list[dict],
         redeem_loyalty_points: float,
         is_credit_sale: bool,
+        coupon_code: str | None = None,
+        gift_card_number: str | None = None,
+        gift_card_amount: float = 0,
     ) -> SalesInvoice:
         branch = self.db.get(Branch, branch_id)
         if branch is None:
@@ -187,7 +192,14 @@ class SalesService:
                 raise ValidationError("Loyalty point redemption requires a customer")
             loyalty_discount = self.loyalty.redeem(customer, invoice.id, redeem_loyalty_points)
 
-        pre_round_total = taxable_total + cgst_total + sgst_total + igst_total + cess_total - loyalty_discount
+        coupon_discount = 0.0
+        coupon = None
+        if coupon_code:
+            coupon, coupon_discount = self.coupons.validate(organization_id, coupon_code, taxable_total)
+
+        pre_round_total = (
+            taxable_total + cgst_total + sgst_total + igst_total + cess_total - loyalty_discount - coupon_discount
+        )
         grand_total, round_off = round_invoice_total(pre_round_total)
 
         invoice.subtotal = subtotal
@@ -200,6 +212,15 @@ class SalesService:
         invoice.round_off = round_off
         invoice.grand_total = grand_total
         invoice.loyalty_points_redeemed = redeem_loyalty_points
+        invoice.coupon_code = coupon_code if coupon is not None else None
+        invoice.coupon_discount_amount = coupon_discount
+
+        if coupon is not None:
+            self.coupons.redeem(coupon)
+
+        if gift_card_number and gift_card_amount > 0:
+            redeemed = self.gift_cards.redeem(organization_id, gift_card_number, gift_card_amount, invoice.id)
+            payments = [*payments, {"method": "gift_card", "amount": redeemed, "reference": gift_card_number}]
 
         payment_total = sum(p["amount"] for p in payments)
         shortfall = round(grand_total - payment_total, 2)

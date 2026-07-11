@@ -44,6 +44,13 @@ export default function POSPage() {
   const [completedInvoice, setCompletedInvoice] = useState<SaleInvoice | null>(null)
   const barcodeRef = useRef<HTMLInputElement>(null)
 
+  const [couponCodeInput, setCouponCodeInput] = useState('')
+  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discount: number } | null>(null)
+  const [couponError, setCouponError] = useState<string | null>(null)
+  const [checkingCoupon, setCheckingCoupon] = useState(false)
+  const [giftCardNumber, setGiftCardNumber] = useState('')
+  const [giftCardAmount, setGiftCardAmount] = useState(0)
+
   useEffect(() => {
     apiClient.get<Branch[]>('/org/branches').then((res) => setBranch(res.data[0] ?? null))
     barcodeRef.current?.focus()
@@ -65,16 +72,42 @@ export default function POSPage() {
       taxable += lineTaxable
       tax += lineTax
     }
-    const grandTotalEstimate = roundHalfUp(taxable + tax, 0)
+    const preDiscount = taxable + tax
+    const couponDiscount = appliedCoupon?.discount ?? 0
+    const grandTotalEstimate = Math.max(0, roundHalfUp(preDiscount, 0) - couponDiscount)
     return { taxable, tax, grandTotalEstimate }
-  }, [cart])
+  }, [cart, appliedCoupon])
 
-  // Keep the default single cash payment in sync with the live estimate so
-  // the common case (customer pays exactly the billed amount) needs no
-  // manual entry; split-tender users editing multiple rows are left alone.
+  // Keep the default single cash payment in sync with the live estimate
+  // (net of gift card redemption) so the common case needs no manual
+  // entry; split-tender users editing multiple rows are left alone.
   useEffect(() => {
-    setPayments((prev) => (prev.length === 1 ? [{ ...prev[0], amount: estimate.grandTotalEstimate }] : prev))
-  }, [estimate.grandTotalEstimate])
+    const dueAfterGiftCard = Math.max(0, estimate.grandTotalEstimate - (giftCardAmount || 0))
+    setPayments((prev) => (prev.length === 1 ? [{ ...prev[0], amount: dueAfterGiftCard }] : prev))
+  }, [estimate.grandTotalEstimate, giftCardAmount])
+
+  async function applyCoupon() {
+    if (!couponCodeInput) return
+    setCheckingCoupon(true)
+    setCouponError(null)
+    try {
+      const res = await apiClient.post('/loyalty/coupons/validate', {
+        code: couponCodeInput,
+        order_value: estimate.taxable,
+      })
+      if (res.data.valid) {
+        setAppliedCoupon({ code: couponCodeInput, discount: res.data.discount_amount })
+      } else {
+        setAppliedCoupon(null)
+        setCouponError(res.data.reason ?? 'Coupon is not valid')
+      }
+    } catch (err) {
+      setAppliedCoupon(null)
+      setCouponError(apiErrorMessage(err))
+    } finally {
+      setCheckingCoupon(false)
+    }
+  }
 
   const paymentTotal = payments.reduce((sum, p) => sum + (Number.isFinite(p.amount) ? p.amount : 0), 0)
   const balanceDue = Math.max(0, estimate.grandTotalEstimate - paymentTotal)
@@ -159,12 +192,20 @@ export default function POSPage() {
           discount_amount: l.discountAmount,
         })),
         payments: isCreditSale ? [] : payments.filter((p) => p.amount > 0),
+        coupon_code: appliedCoupon?.code ?? null,
+        gift_card_number: giftCardNumber || null,
+        gift_card_amount: giftCardNumber ? giftCardAmount : 0,
       })
       setCompletedInvoice(res.data)
       setCart([])
       setCustomer(null)
       setIsCreditSale(false)
       setPayments([{ method: 'cash', amount: 0 }])
+      setCouponCodeInput('')
+      setAppliedCoupon(null)
+      setCouponError(null)
+      setGiftCardNumber('')
+      setGiftCardAmount(0)
     } catch (err) {
       setError(apiErrorMessage(err))
     } finally {
@@ -308,10 +349,76 @@ export default function POSPage() {
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-800">
+          <h2 className="mb-2 text-sm font-semibold text-slate-700 dark:text-slate-300">Coupon</h2>
+          {appliedCoupon ? (
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-emerald-600">
+                {appliedCoupon.code} applied (-₹{appliedCoupon.discount.toFixed(2)})
+              </span>
+              <button
+                onClick={() => {
+                  setAppliedCoupon(null)
+                  setCouponCodeInput('')
+                }}
+                className="text-red-500"
+              >
+                Remove
+              </button>
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              <input
+                value={couponCodeInput}
+                onChange={(e) => {
+                  setCouponCodeInput(e.target.value.toUpperCase())
+                  setCouponError(null)
+                }}
+                placeholder="Coupon code"
+                className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100"
+              />
+              <button
+                onClick={applyCoupon}
+                disabled={checkingCoupon || !couponCodeInput}
+                className="rounded-lg bg-slate-800 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50 dark:bg-slate-600"
+              >
+                {checkingCoupon ? '...' : 'Apply'}
+              </button>
+            </div>
+          )}
+          {couponError && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{couponError}</p>}
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-800">
+          <h2 className="mb-2 text-sm font-semibold text-slate-700 dark:text-slate-300">Gift Card (optional)</h2>
+          <div className="flex gap-2">
+            <input
+              value={giftCardNumber}
+              onChange={(e) => setGiftCardNumber(e.target.value)}
+              placeholder="Card number"
+              className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100"
+            />
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              value={giftCardAmount || ''}
+              onChange={(e) => setGiftCardAmount(Number(e.target.value))}
+              placeholder="Amount"
+              className="w-28 rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100"
+            />
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-800">
           <h2 className="mb-2 text-sm font-semibold text-slate-700 dark:text-slate-300">Summary (estimate)</h2>
           <div className="space-y-1 text-sm text-slate-600 dark:text-slate-300">
             <div className="flex justify-between"><span>Taxable value</span><span>₹{estimate.taxable.toFixed(2)}</span></div>
             <div className="flex justify-between"><span>GST (approx.)</span><span>₹{estimate.tax.toFixed(2)}</span></div>
+            {appliedCoupon && (
+              <div className="flex justify-between text-emerald-600">
+                <span>Coupon discount</span><span>-₹{appliedCoupon.discount.toFixed(2)}</span>
+              </div>
+            )}
             <div className="flex justify-between border-t border-slate-200 pt-2 text-base font-semibold text-slate-900 dark:border-slate-700 dark:text-slate-50">
               <span>Grand total (approx.)</span><span>₹{estimate.grandTotalEstimate.toFixed(2)}</span>
             </div>
@@ -398,6 +505,9 @@ function Receipt({ invoice, onNewSale }: { invoice: SaleInvoice; onNewSale: () =
         {invoice.cgst_total > 0 && <div className="flex justify-between"><span>CGST</span><span>₹{invoice.cgst_total.toFixed(2)}</span></div>}
         {invoice.sgst_total > 0 && <div className="flex justify-between"><span>SGST</span><span>₹{invoice.sgst_total.toFixed(2)}</span></div>}
         {invoice.igst_total > 0 && <div className="flex justify-between"><span>IGST</span><span>₹{invoice.igst_total.toFixed(2)}</span></div>}
+        {invoice.coupon_discount_amount > 0 && (
+          <div className="flex justify-between"><span>Coupon ({invoice.coupon_code})</span><span>-₹{invoice.coupon_discount_amount.toFixed(2)}</span></div>
+        )}
         <div className="flex justify-between"><span>Round off</span><span>₹{invoice.round_off.toFixed(2)}</span></div>
         <hr className="my-2 border-dashed" />
         <div className="flex justify-between text-base font-bold"><span>Grand Total</span><span>₹{invoice.grand_total.toFixed(2)}</span></div>

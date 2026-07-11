@@ -26,6 +26,9 @@ class SaleCreateRequest(BaseModel):
     payments: list[PaymentRequest] = Field(default_factory=list)
     redeem_loyalty_points: float = Field(default=0, ge=0)
     is_credit_sale: bool = False
+    coupon_code: str | None = None
+    gift_card_number: str | None = None
+    gift_card_amount: float = Field(default=0, ge=0)
 
 
 class SaleInvoiceItemResponse(BaseModel):
@@ -76,6 +79,8 @@ class SaleInvoiceResponse(BaseModel):
     status: str
     loyalty_points_earned: float
     loyalty_points_redeemed: float
+    coupon_code: str | None
+    coupon_discount_amount: float
     items: list[SaleInvoiceItemResponse]
     payments: list[PaymentResponse]
 

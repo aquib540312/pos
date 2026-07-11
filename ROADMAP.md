@@ -49,6 +49,15 @@ Status: in progress / see commit history for exact state.
       (one MRP on the pack). A full promo rule DSL ("buy 2 get 1", tiered
       slabs, auto-detected combos at checkout) is a separate, larger
       feature — this covers pre-defined combo SKUs only.
+- [x] Coupons and gift cards, previously standalone endpoints only, are now
+      wired into the actual checkout: `POST /sales` accepts `coupon_code`
+      (validated against min order value/date range/redemption limit,
+      applied as a post-tax discount, redemption count incremented) and
+      `gift_card_number`/`gift_card_amount` (balance/expiry checked,
+      recorded as an implicit `gift_card` payment). The invoice now stores
+      which coupon was used and its discount amount (new migration). POS
+      billing screen has real Coupon and Gift Card fields, verified
+      end-to-end in a browser.
 - GSTR-1/3B **filing** integration — requires a GSP (GST Suvidha Provider)
   API account and credentials from you; today we generate the correct
   line-level data, not the government-format JSON/upload.

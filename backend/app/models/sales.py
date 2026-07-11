@@ -73,6 +73,8 @@ class SalesInvoice(Base, UUIDPKMixin, TimestampMixin):
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="posted")  # posted|cancelled
     loyalty_points_earned: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
     loyalty_points_redeemed: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
+    coupon_code: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    coupon_discount_amount: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
 
     items: Mapped[list["SalesInvoiceItem"]] = relationship(back_populates="invoice")
     payments: Mapped[list["Payment"]] = relationship("Payment", back_populates="invoice")
