@@ -19,17 +19,19 @@
 #   - Render's free workspace plan does not support background worker
 #     services at all (confirmed live: "service type is not available for
 #     this plan"), so there is deliberately no pos-celery-worker service
-#     below. The only thing that costs you: receipt SMS and print-job
-#     dispatch are queued to Redis (via .delay()) but never picked up and
-#     processed, since nothing is running to consume that queue -- they
-#     fail silently by design (never blocks checkout), so this is a
-#     missing feature, not a bug, on the free plan. Billing, inventory,
-#     GST, and reports are unaffected. Add the worker back (copy the
-#     pos-backend service block, change `type: web` to `type: worker`,
-#     drop `healthCheckPath`, add `dockerCommand: celery -A
-#     app.celery_app:celery_app worker --loglevel=info` and
-#     `SKIP_MIGRATIONS: "true"`) once your Render workspace is on a paid
-#     plan.
+#     below. Instead, POS_CELERY_TASK_ALWAYS_EAGER=true makes pos-backend
+#     run receipt SMS and print-job dispatch synchronously, in-process,
+#     right when a sale is posted -- rather than handing them to a worker
+#     that doesn't exist. They still run correctly, just add a little
+#     latency to that one request instead of being decoupled from it (see
+#     Settings.celery_task_always_eager in app/core/config.py for exactly
+#     what that trades off). Once your Render workspace is on a paid plan
+#     and you add a real pos-celery-worker service back (copy the
+#     pos-backend block, `type: worker`, drop `healthCheckPath`, add
+#     `dockerCommand: celery -A app.celery_app:celery_app worker
+#     --loglevel=info` and `SKIP_MIGRATIONS: "true"`), remove
+#     POS_CELERY_TASK_ALWAYS_EAGER from pos-backend to go back to true
+#     background dispatch.
 #   - Every *_KEY / *_SECRET below is a safe mock/test default (same ones
 #     used in local dev). UPI QR payments, SMS receipts, and GST e-filing
 #     will not actually reach Razorpay/MSG91/a real GSP until you replace
@@ -74,6 +76,11 @@ services:
           property: connectionString
       - key: POS_SECRET_KEY
         generateValue: true
+      # No Celery worker on this plan (see the top-of-file note) -- run
+      # background tasks synchronously in-process instead of queuing them
+      # to nowhere.
+      - key: POS_CELERY_TASK_ALWAYS_EAGER
+        value: "true"
       # UPI QR payments (Razorpay) -- test-mode defaults, safe to ship.
       # Replace with real rzp_live_... values in the Render dashboard once
       # you have a Razorpay account. See ARCHITECTURE.md #9.

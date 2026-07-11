@@ -65,6 +65,22 @@ class Settings(BaseSettings):
     sync_pull_page_size: int = 500
     sync_push_max_batch_size: int = 200
 
+    # -- Background tasks (Celery) --------------------------------------
+    # Normally .delay() hands a task to a separate Celery worker process
+    # (docker-compose.yml's celery_worker service) so a slow/unavailable
+    # SMS provider or printer can never add latency to a checkout request.
+    # Some hosts (e.g. Render's free plan) don't offer a worker/background
+    # service at all -- with no worker running to consume it, a queued
+    # task just sits in Redis forever and never executes. Setting this
+    # true switches Celery to "eager" mode: .delay() runs the task
+    # synchronously, in-process, right there in the request -- still
+    # correct (the task itself still runs), just no longer decoupled from
+    # request latency. Every task this app defines already has its own
+    # short timeout and never raises past its own boundary (see
+    # notifications/adapters.py, printing/service.py), so the added
+    # latency in the worst case is bounded, not unbounded.
+    celery_task_always_eager: bool = False
+
 
 @lru_cache
 def get_settings() -> Settings:

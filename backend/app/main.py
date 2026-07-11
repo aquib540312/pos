@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -19,6 +21,14 @@ from app.modules.rbac.api import router as rbac_router
 from app.modules.reports.api import router as reports_router
 from app.modules.sales.api import router as sales_router
 from app.modules.sync.api import router as sync_router
+
+# Without this, the root logger's default level (WARNING) silently drops
+# every INFO-level log in the app -- including the ones that are the only
+# visible trace that a background task ran at all now that
+# celery_task_always_eager makes them execute in-process instead of on a
+# separately-observable worker (see notifications/adapters.py's
+# LoggingAdapter, printing/service.py).
+logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s:%(message)s")
 
 settings = get_settings()
 
