@@ -5,7 +5,9 @@ from sqlalchemy.orm import Session
 
 from app.core.numbering import next_document_number
 from app.models.catalog import ProductBatch
+from app.models.party import Supplier
 from app.models.purchasing import GoodsReceipt, GoodsReceiptItem, PurchaseOrder, PurchaseOrderItem
+from app.modules.accounting.service import AccountingService
 from app.modules.inventory.service import InventoryService
 from app.modules.purchasing.repository import GoodsReceiptRepository, PurchaseOrderRepository
 
@@ -16,6 +18,7 @@ class PurchasingService:
         self.purchase_orders = PurchaseOrderRepository(db)
         self.goods_receipts = GoodsReceiptRepository(db)
         self.inventory = InventoryService(db)
+        self.accounting = AccountingService(db)
 
     def create_purchase_order(
         self,
@@ -76,6 +79,7 @@ class PurchasingService:
 
         po = self.purchase_orders.get(purchase_order_id) if purchase_order_id else None
         po_items_by_product = {i.product_id: i for i in po.items} if po else {}
+        total_cost = 0.0
 
         for idx, item in enumerate(items):
             batch = ProductBatch(
@@ -113,8 +117,14 @@ class PurchasingService:
             if po_item is not None:
                 po_item.quantity_received = float(po_item.quantity_received) + item["quantity"]
 
+            total_cost += float(item["quantity"]) * float(item["unit_cost"])
+
         if po is not None and all(float(i.quantity_received) >= float(i.quantity_ordered) for i in po.items):
             po.status = "received"
+
+        supplier = self.db.get(Supplier, supplier_id)
+        supplier.payable_balance = float(supplier.payable_balance) + total_cost
+        self.accounting.post_goods_receipt(grn, total_cost)
 
         self.db.flush()
         return self.goods_receipts.get(grn.id)

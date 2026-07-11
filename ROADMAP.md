@@ -22,12 +22,19 @@ Status: in progress / see commit history for exact state.
       Nginx), GitHub Actions CI (lint + test)
 
 ## Phase 2 — Depth on the built modules (needs product prioritization)
+- [x] Stock transfer between branches/warehouses: draft -> dispatched ->
+      received lifecycle, FEFO batch allocation on dispatch, stock genuinely
+      in-transit (unsellable at either end) between the two steps.
+- [x] Full accounting: journal entries now post on goods receipt (Inventory
+      vs Accounts Payable) and sales returns (reversing revenue/GST vs
+      cash/bank/receivable) in addition to sales; P&L and Balance Sheet
+      report endpoints (`/reports/profit-and-loss`, `/reports/balance-sheet`)
+      built on top of the ledger. Known simplification: purchase-side input
+      GST credit isn't posted yet because PO/GRN line items don't carry
+      HSN/tax-rate data — only ex-tax cost is booked to Inventory.
 - Combo product rule engine (currently: basic percentage/flat discounts and
   manual combo price only; a full rule DSL — "buy 2 get 1", tiered slabs —
   needs your priority ranking of which promo types matter first).
-- Stock transfer between branches/warehouses with approval workflow.
-- Full accounting: P&L and Balance Sheet report generation (ledger posting
-  exists; report rendering does not yet).
 - GSTR-1/3B **filing** integration — requires a GSP (GST Suvidha Provider)
   API account and credentials from you; today we generate the correct
   line-level data, not the government-format JSON/upload.

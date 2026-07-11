@@ -261,4 +261,7 @@ class SalesService:
                 self.party.record_credit_payment(customer, refund_total)
 
         self.db.flush()
-        return self.returns.get(sales_return.id)
+        sales_return = self.returns.get(sales_return.id)
+        self.accounting.post_sales_return(sales_return)
+        self.db.flush()
+        return sales_return
