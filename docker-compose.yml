@@ -61,8 +61,12 @@ services:
   celery_worker:
     build: ./backend
     command: celery -A app.celery_app:celery_app worker --loglevel=info
-    entrypoint: []
-    environment: *backend-env
+    environment:
+      <<: *backend-env
+      # The backend service already runs migrations on boot -- if the
+      # worker's entrypoint did too, both containers would race to write
+      # alembic_version at the same time on a cold start.
+      SKIP_MIGRATIONS: "true"
     depends_on:
       postgres:
         condition: service_healthy

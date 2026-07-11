@@ -21,7 +21,11 @@ print("Database never became ready.", file=sys.stderr)
 sys.exit(1)
 EOF
 
-echo "Running migrations..."
-alembic upgrade head
+if [ "${SKIP_MIGRATIONS:-}" = "true" ]; then
+    echo "SKIP_MIGRATIONS=true -- not running migrations from this container (e.g. the Celery worker, so two processes don't race to migrate the same database on boot)."
+else
+    echo "Running migrations..."
+    alembic upgrade head
+fi
 
 exec "$@"
