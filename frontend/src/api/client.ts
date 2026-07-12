@@ -8,8 +8,13 @@ import { useAuthStore } from '../store/auth'
 // standalone web service, each on its own onrender.com subdomain),
 // VITE_API_HOST names the backend's real host at build time and every
 // request goes straight to it instead.
+// Render's fromService "host" property (see render.yaml) resolves to the
+// service's private-network hostname slug, e.g. "pos-backend-a1b2" -- NOT
+// a resolvable domain on its own. The browser running this bundle has no
+// access to Render's private network at all; it needs the real public
+// hostname, which is that same slug with .onrender.com appended.
 const apiBaseUrl = import.meta.env.VITE_API_HOST
-  ? `https://${import.meta.env.VITE_API_HOST}/api/v1`
+  ? `https://${import.meta.env.VITE_API_HOST}.onrender.com/api/v1`
   : '/api/v1'
 
 export const apiClient = axios.create({

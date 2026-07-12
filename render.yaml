@@ -124,7 +124,11 @@ services:
       # The frontend and backend are two independent Render services (no
       # shared reverse proxy between them, unlike local docker-compose's
       # nginx), so every API call needs the backend's real host baked in
-      # at build time -- see frontend/src/api/client.ts.
+      # at build time -- see frontend/src/api/client.ts. Render's "host"
+      # property resolves to the private-network hostname slug (not a
+      # publicly resolvable domain by itself); client.ts appends
+      # .onrender.com to turn it into the real public hostname the
+      # browser can actually reach.
       - key: VITE_API_HOST
         fromService:
           type: web
