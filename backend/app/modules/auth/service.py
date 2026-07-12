@@ -2,7 +2,7 @@ import uuid
 
 from sqlalchemy.orm import Session
 
-from app.core.exceptions import AuthenticationError, ConflictError
+from app.core.exceptions import AuthenticationError, ConflictError, NotFoundError, ValidationError
 from app.core.security import create_access_token, hash_password, verify_password
 from app.models.rbac import User
 from app.modules.auth.repository import UserRepository
@@ -40,4 +40,27 @@ class AuthService:
         self.users.add(user)
         for role_id in role_ids or []:
             self.users.assign_role(user.id, role_id)
+        return user
+
+    def get_user_or_404(self, user_id: uuid.UUID) -> User:
+        user = self.users.get(user_id)
+        if user is None:
+            raise NotFoundError(f"User {user_id} not found")
+        return user
+
+    def list_users(self, organization_id: uuid.UUID) -> list[User]:
+        return self.users.list(organization_id)
+
+    def set_active(self, actor_user_id: uuid.UUID, target_user_id: uuid.UUID, is_active: bool) -> User:
+        if actor_user_id == target_user_id and not is_active:
+            raise ValidationError("You cannot deactivate your own account")
+        user = self.get_user_or_404(target_user_id)
+        user.is_active = is_active
+        self.db.flush()
+        return user
+
+    def update_roles(self, user_id: uuid.UUID, role_ids: list[uuid.UUID]) -> User:
+        user = self.get_user_or_404(user_id)
+        self.users.replace_roles(user_id, role_ids)
+        self.db.flush()
         return user

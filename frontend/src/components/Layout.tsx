@@ -7,6 +7,7 @@ const NAV_ITEMS = [
   { to: '/shift', label: 'Shift & Cash' },
   { to: '/products', label: 'Products' },
   { to: '/customers', label: 'Customers' },
+  { to: '/staff', label: 'Staff' },
   { to: '/reports', label: 'Reports' },
   { to: '/sync', label: 'Sync Status' },
 ]

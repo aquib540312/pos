@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import uuid
 
 from sqlalchemy import select
@@ -27,6 +29,10 @@ class UserRepository:
     def get(self, user_id: uuid.UUID) -> User | None:
         return self.db.get(User, user_id)
 
+    def list(self, organization_id: uuid.UUID) -> list[User]:
+        stmt = select(User).where(User.organization_id == organization_id).order_by(User.full_name)
+        return list(self.db.execute(stmt).scalars())
+
     def add(self, user: User) -> User:
         self.db.add(user)
         self.db.flush()
@@ -37,3 +43,11 @@ class UserRepository:
         self.db.add(assignment)
         self.db.flush()
         return assignment
+
+    def replace_roles(self, user_id: uuid.UUID, role_ids: list[uuid.UUID]) -> None:
+        stmt = select(UserRole).where(UserRole.user_id == user_id)
+        for existing in self.db.execute(stmt).scalars():
+            self.db.delete(existing)
+        self.db.flush()
+        for role_id in role_ids:
+            self.assign_role(user_id, role_id)

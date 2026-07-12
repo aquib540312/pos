@@ -9,6 +9,7 @@ import POSPage from './pages/POSPage'
 import SyncDashboardPage from './pages/SyncDashboardPage'
 import ReportsPage from './pages/ReportsPage'
 import ShiftPage from './pages/ShiftPage'
+import StaffPage from './pages/StaffPage'
 
 export default function App() {
   return (
@@ -22,6 +23,7 @@ export default function App() {
             <Route path="/shift" element={<ShiftPage />} />
             <Route path="/products" element={<ProductsPage />} />
             <Route path="/customers" element={<CustomersPage />} />
+            <Route path="/staff" element={<StaffPage />} />
             <Route path="/sync" element={<SyncDashboardPage />} />
             <Route path="/reports" element={<ReportsPage />} />
           </Route>

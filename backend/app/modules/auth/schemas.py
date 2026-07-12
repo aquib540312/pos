@@ -27,5 +27,15 @@ class UserResponse(BaseModel):
     email: str
     phone: str | None
     is_active: bool
+    role_ids: list[uuid.UUID] = Field(default_factory=list)
+    role_names: list[str] = Field(default_factory=list)
 
     model_config = {"from_attributes": True}
+
+
+class UserActiveUpdateRequest(BaseModel):
+    is_active: bool
+
+
+class UserRolesUpdateRequest(BaseModel):
+    role_ids: list[uuid.UUID] = Field(default_factory=list)
