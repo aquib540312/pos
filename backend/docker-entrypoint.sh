@@ -22,10 +22,12 @@ sys.exit(1)
 EOF
 
 if [ "${SKIP_MIGRATIONS:-}" = "true" ]; then
-    echo "SKIP_MIGRATIONS=true -- not running migrations from this container (e.g. the Celery worker, so two processes don't race to migrate the same database on boot)."
+    echo "SKIP_MIGRATIONS=true -- not running migrations or seeding from this container (e.g. the Celery worker, so two processes don't race to migrate/seed the same database on boot)."
 else
     echo "Running migrations..."
     alembic upgrade head
+    echo "Seeding demo data (no-op if already seeded)..."
+    python -m app.seed
 fi
 
 exec "$@"

@@ -15,12 +15,15 @@ Read **[ARCHITECTURE.md](ARCHITECTURE.md)** for the design decisions and
 ```bash
 cp .env.example .env   # set POS_SECRET_KEY
 docker compose up --build
-docker compose exec backend python -m app.seed   # creates a demo org + admin login
 ```
+
+The backend container seeds a demo org + admin login automatically on first
+boot against an empty database (see `backend/docker-entrypoint.sh`); it's a
+no-op on every boot after that.
 
 - Frontend: http://localhost
 - Backend API docs: http://localhost:8000/docs
-- Demo login (after seeding): `admin@demo.local` / `ChangeMe123!`
+- Demo login: `admin@demo.local` / `ChangeMe123!`
 
 ## Local development
 

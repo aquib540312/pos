@@ -17,6 +17,15 @@ from app.modules.rbac.service import RoleService
 def run() -> None:
     db = SessionLocal()
     try:
+        # Safe to call on every boot (see docker-entrypoint.sh): only the
+        # very first run against an empty database actually seeds anything.
+        # Without this guard, re-running against an already-seeded database
+        # (e.g. every redeploy) would crash on the admin email's unique
+        # constraint instead of just doing nothing.
+        if db.query(Organization).first() is not None:
+            print("Database already seeded -- skipping.")
+            return
+
         org = Organization(
             legal_name="Demo Retail Pvt Ltd",
             trade_name="Demo Retail",
