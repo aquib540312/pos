@@ -1,7 +1,7 @@
 import uuid
 from datetime import date, datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class PurchaseOrderItemRequest(BaseModel):
@@ -42,9 +42,19 @@ class PurchaseOrderResponse(BaseModel):
 class GoodsReceiptItemRequest(BaseModel):
     product_id: uuid.UUID
     quantity: float = Field(gt=0)
+    # Bonus/free pieces included within `quantity` (e.g. a supplier's
+    # "10+1 free" scheme) -- physically received and sellable, but not
+    # part of what's owed to the supplier. Must be <= quantity.
+    free_quantity: float = Field(ge=0, default=0)
     unit_cost: float = Field(ge=0)
     batch_number: str | None = None
     expiry_date: date | None = None
+
+    @model_validator(mode="after")
+    def _free_quantity_within_total(self) -> "GoodsReceiptItemRequest":
+        if self.free_quantity > self.quantity:
+            raise ValueError("free_quantity cannot exceed quantity")
+        return self
 
 
 class GoodsReceiptCreateRequest(BaseModel):
@@ -60,6 +70,7 @@ class GoodsReceiptItemResponse(BaseModel):
     product_id: uuid.UUID
     batch_id: uuid.UUID | None
     quantity: float
+    free_quantity: float
     unit_cost: float
 
     model_config = {"from_attributes": True}

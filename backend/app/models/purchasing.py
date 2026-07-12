@@ -66,6 +66,12 @@ class GoodsReceiptItem(Base, UUIDPKMixin):
     product_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("products.id"), nullable=False)
     batch_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("product_batches.id"), nullable=True)
     quantity: Mapped[float] = mapped_column(Numeric(14, 3, asdecimal=False), nullable=False)
+    # Bonus/free pieces included within `quantity` (e.g. a supplier's "10+1
+    # free" scheme) -- physically received and sellable like the rest of
+    # the batch, but not owed to the supplier. paid_quantity = quantity -
+    # free_quantity is what actually costs money and counts toward a
+    # linked PO's fulfillment; see PurchasingService.receive_goods.
+    free_quantity: Mapped[float] = mapped_column(Numeric(14, 3, asdecimal=False), nullable=False, default=0)
     unit_cost: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False)
 
     goods_receipt: Mapped["GoodsReceipt"] = relationship(back_populates="items")

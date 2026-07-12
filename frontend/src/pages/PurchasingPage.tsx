@@ -23,6 +23,7 @@ interface DraftItem {
   product_id: string
   product_name: string
   quantity: string
+  free_quantity: string
   unit_cost: string
 }
 
@@ -170,11 +171,13 @@ function ItemsTable({
   onChange,
   onRemove,
   costLabel,
+  showFreeQty,
 }: {
   items: DraftItem[]
-  onChange: (key: string, field: 'quantity' | 'unit_cost', value: string) => void
+  onChange: (key: string, field: 'quantity' | 'free_quantity' | 'unit_cost', value: string) => void
   onRemove: (key: string) => void
   costLabel: string
+  showFreeQty?: boolean
 }) {
   if (items.length === 0) return null
   return (
@@ -183,6 +186,7 @@ function ItemsTable({
         <tr>
           <th className="py-1">Product</th>
           <th className="py-1">Qty</th>
+          {showFreeQty && <th className="py-1">Free/Bonus Qty</th>}
           <th className="py-1">{costLabel}</th>
           <th className="py-1" />
         </tr>
@@ -201,6 +205,20 @@ function ItemsTable({
                 className="w-24 rounded-lg border border-slate-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100"
               />
             </td>
+            {showFreeQty && (
+              <td className="py-1 pr-2">
+                <input
+                  type="number"
+                  min="0"
+                  step="0.001"
+                  max={it.quantity || undefined}
+                  value={it.free_quantity}
+                  onChange={(e) => onChange(it.key, 'free_quantity', e.target.value)}
+                  title="Bonus/free pieces included in Qty above (e.g. a supplier's '10+1 free' scheme) -- received into stock but not billed."
+                  className="w-24 rounded-lg border border-slate-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100"
+                />
+              </td>
+            )}
             <td className="py-1 pr-2">
               <input
                 type="number"
@@ -247,11 +265,18 @@ function PurchaseOrdersTab({
   function addProduct(p: Product) {
     setItems((cur) => [
       ...cur,
-      { key: p.id, product_id: p.id, product_name: p.name, quantity: '1', unit_cost: String(p.purchase_price) },
+      {
+        key: p.id,
+        product_id: p.id,
+        product_name: p.name,
+        quantity: '1',
+        free_quantity: '0',
+        unit_cost: String(p.purchase_price),
+      },
     ])
   }
 
-  function updateItem(key: string, field: 'quantity' | 'unit_cost', value: string) {
+  function updateItem(key: string, field: 'quantity' | 'free_quantity' | 'unit_cost', value: string) {
     setItems((cur) => cur.map((it) => (it.key === key ? { ...it, [field]: value } : it)))
   }
 
@@ -407,7 +432,14 @@ function GoodsReceiptsTab({
   function addProduct(p: Product) {
     setItems((cur) => [
       ...cur,
-      { key: `${p.id}-${Date.now()}`, product_id: p.id, product_name: p.name, quantity: '1', unit_cost: String(p.purchase_price) },
+      {
+        key: `${p.id}-${Date.now()}`,
+        product_id: p.id,
+        product_name: p.name,
+        quantity: '1',
+        free_quantity: '0',
+        unit_cost: String(p.purchase_price),
+      },
     ])
   }
 
@@ -423,12 +455,13 @@ function GoodsReceiptsTab({
           product_id: i.product_id,
           product_name: productNames[i.product_id] ?? i.product_id,
           quantity: String(i.quantity_ordered - i.quantity_received),
+          free_quantity: '0',
           unit_cost: String(i.unit_cost),
         })),
     )
   }
 
-  function updateItem(key: string, field: 'quantity' | 'unit_cost', value: string) {
+  function updateItem(key: string, field: 'quantity' | 'free_quantity' | 'unit_cost', value: string) {
     setItems((cur) => cur.map((it) => (it.key === key ? { ...it, [field]: value } : it)))
   }
 
@@ -452,6 +485,7 @@ function GoodsReceiptsTab({
         items: items.map((it) => ({
           product_id: it.product_id,
           quantity: Number(it.quantity),
+          free_quantity: Number(it.free_quantity || 0),
           unit_cost: Number(it.unit_cost),
         })),
       })
@@ -514,7 +548,7 @@ function GoodsReceiptsTab({
           </div>
           <ProductPicker onPick={addProduct} />
           <div className="mt-3">
-            <ItemsTable items={items} onChange={updateItem} onRemove={removeItem} costLabel="Unit Cost" />
+            <ItemsTable items={items} onChange={updateItem} onRemove={removeItem} costLabel="Unit Cost" showFreeQty />
           </div>
           <button
             type="submit"

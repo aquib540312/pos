@@ -73,6 +73,7 @@ export interface GoodsReceiptItem {
   product_id: string
   batch_id: string | null
   quantity: number
+  free_quantity: number
   unit_cost: number
 }
 

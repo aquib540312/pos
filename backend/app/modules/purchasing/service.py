@@ -82,12 +82,21 @@ class PurchasingService:
         total_cost = 0.0
 
         for idx, item in enumerate(items):
+            total_qty = float(item["quantity"])
+            free_qty = float(item.get("free_quantity", 0))
+            paid_qty = total_qty - free_qty
+            # A supplier bonus/scheme (e.g. "10+1 free") spreads the same
+            # invoiced cost across more physical units -- the batch's
+            # landed cost per unit is lower than the invoiced unit_cost,
+            # while unit_cost itself stays the actual invoiced rate.
+            effective_unit_cost = (paid_qty * float(item["unit_cost"])) / total_qty if total_qty else 0.0
+
             batch = ProductBatch(
                 organization_id=organization_id,
                 product_id=item["product_id"],
                 batch_number=item.get("batch_number") or f"{grn.grn_number}-{idx + 1}",
                 expiry_date=item.get("expiry_date"),
-                purchase_price=item["unit_cost"],
+                purchase_price=effective_unit_cost,
             )
             self.db.add(batch)
             self.db.flush()
@@ -96,7 +105,8 @@ class PurchasingService:
                 goods_receipt_id=grn.id,
                 product_id=item["product_id"],
                 batch_id=batch.id,
-                quantity=item["quantity"],
+                quantity=total_qty,
+                free_quantity=free_qty,
                 unit_cost=item["unit_cost"],
             )
             self.db.add(grn_item)
@@ -107,7 +117,7 @@ class PurchasingService:
                 warehouse_id=warehouse_id,
                 product_id=item["product_id"],
                 batch_id=batch.id,
-                quantity=item["quantity"],
+                quantity=total_qty,
                 movement_type="purchase_receipt",
                 reference_type="goods_receipt",
                 reference_id=grn.id,
@@ -115,9 +125,9 @@ class PurchasingService:
 
             po_item = po_items_by_product.get(item["product_id"])
             if po_item is not None:
-                po_item.quantity_received = float(po_item.quantity_received) + item["quantity"]
+                po_item.quantity_received = float(po_item.quantity_received) + paid_qty
 
-            total_cost += float(item["quantity"]) * float(item["unit_cost"])
+            total_cost += paid_qty * float(item["unit_cost"])
 
         if po is not None and all(float(i.quantity_received) >= float(i.quantity_ordered) for i in po.items):
             po.status = "received"
