@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.deps import require_permission
@@ -21,6 +21,16 @@ router = APIRouter(prefix="/api/v1/purchasing", tags=["purchasing"])
 @router.get("/purchase-orders", response_model=list[PurchaseOrderResponse])
 def list_purchase_orders(db: Session = Depends(get_db), user: User = Depends(require_permission(Perm.PURCHASE_CREATE))):
     return PurchasingService(db).purchase_orders.list(user.organization_id)
+
+
+@router.get("/purchase-orders/{po_id}", response_model=PurchaseOrderResponse)
+def get_purchase_order(
+    po_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(require_permission(Perm.PURCHASE_CREATE))
+):
+    po = PurchasingService(db).purchase_orders.get(po_id)
+    if po is None or po.organization_id != user.organization_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"Purchase order {po_id} not found")
+    return po
 
 
 @router.post("/purchase-orders", response_model=PurchaseOrderResponse, status_code=status.HTTP_201_CREATED)
@@ -57,6 +67,13 @@ def create_goods_receipt(
     )
     db.commit()
     return grn
+
+
+@router.get("/goods-receipts", response_model=list[GoodsReceiptResponse])
+def list_goods_receipts(
+    db: Session = Depends(get_db), user: User = Depends(require_permission(Perm.PURCHASE_RECEIVE))
+):
+    return PurchasingService(db).goods_receipts.list(user.organization_id)
 
 
 @router.get("/goods-receipts/{grn_id}", response_model=GoodsReceiptResponse)

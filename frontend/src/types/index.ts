@@ -41,6 +41,49 @@ export interface Customer {
   loyalty_points_balance: number
 }
 
+export interface Supplier {
+  id: string
+  name: string
+  phone: string | null
+  email: string | null
+  gstin: string | null
+  state_code: string | null
+  payable_balance: number
+}
+
+export interface PurchaseOrderItem {
+  id: string
+  product_id: string
+  quantity_ordered: number
+  quantity_received: number
+  unit_cost: number
+}
+
+export interface PurchaseOrder {
+  id: string
+  po_number: string
+  supplier_id: string
+  order_date: string
+  status: string
+  items: PurchaseOrderItem[]
+}
+
+export interface GoodsReceiptItem {
+  id: string
+  product_id: string
+  batch_id: string | null
+  quantity: number
+  unit_cost: number
+}
+
+export interface GoodsReceipt {
+  id: string
+  grn_number: string
+  supplier_id: string
+  received_at: string
+  items: GoodsReceiptItem[]
+}
+
 export interface UOM {
   id: string
   code: string

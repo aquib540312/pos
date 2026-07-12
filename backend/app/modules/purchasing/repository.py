@@ -47,3 +47,12 @@ class GoodsReceiptRepository:
     def get(self, grn_id: uuid.UUID) -> GoodsReceipt | None:
         stmt = select(GoodsReceipt).where(GoodsReceipt.id == grn_id).options(selectinload(GoodsReceipt.items))
         return self.db.execute(stmt).scalars().first()
+
+    def list(self, organization_id: uuid.UUID) -> list[GoodsReceipt]:
+        stmt = (
+            select(GoodsReceipt)
+            .where(GoodsReceipt.organization_id == organization_id)
+            .options(selectinload(GoodsReceipt.items))
+            .order_by(GoodsReceipt.received_at.desc())
+        )
+        return list(self.db.execute(stmt).scalars())
