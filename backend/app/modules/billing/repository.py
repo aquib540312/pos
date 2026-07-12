@@ -25,3 +25,12 @@ class ShiftRepository:
     def sum_cash_payments(self, shift_id: uuid.UUID) -> float:
         stmt = select(Payment).where(Payment.shift_id == shift_id, Payment.method == "cash")
         return float(sum(float(p.amount) for p in self.db.execute(stmt).scalars()))
+
+    def list(self, organization_id: uuid.UUID, branch_id: uuid.UUID, limit: int = 20) -> list[Shift]:
+        stmt = (
+            select(Shift)
+            .where(Shift.organization_id == organization_id, Shift.branch_id == branch_id)
+            .order_by(Shift.opened_at.desc())
+            .limit(limit)
+        )
+        return list(self.db.execute(stmt).scalars())

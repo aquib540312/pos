@@ -8,6 +8,7 @@ import CustomersPage from './pages/CustomersPage'
 import POSPage from './pages/POSPage'
 import SyncDashboardPage from './pages/SyncDashboardPage'
 import ReportsPage from './pages/ReportsPage'
+import ShiftPage from './pages/ShiftPage'
 
 export default function App() {
   return (
@@ -18,6 +19,7 @@ export default function App() {
           <Route element={<Layout />}>
             <Route path="/" element={<DashboardPage />} />
             <Route path="/pos" element={<POSPage />} />
+            <Route path="/shift" element={<ShiftPage />} />
             <Route path="/products" element={<ProductsPage />} />
             <Route path="/customers" element={<CustomersPage />} />
             <Route path="/sync" element={<SyncDashboardPage />} />

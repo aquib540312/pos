@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 
 from pydantic import BaseModel, Field
 
@@ -16,6 +17,8 @@ class ShiftResponse(BaseModel):
     id: uuid.UUID
     branch_id: uuid.UUID
     user_id: uuid.UUID
+    opened_at: datetime
+    closed_at: datetime | None
     opening_cash: float
     expected_closing_cash: float | None
     counted_closing_cash: float | None
@@ -23,3 +26,7 @@ class ShiftResponse(BaseModel):
     status: str
 
     model_config = {"from_attributes": True}
+
+
+class ShiftSummaryResponse(ShiftResponse):
+    running_cash_sales: float

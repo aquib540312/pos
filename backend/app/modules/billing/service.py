@@ -26,6 +26,16 @@ class ShiftService:
         )
         return self.shifts.add(shift)
 
+    def current_shift(self, user_id: uuid.UUID, branch_id: uuid.UUID) -> tuple[Shift, float] | None:
+        """The cashier's own open shift at this branch, plus cash sales
+        rung up on it so far -- lets the shift screen show a running
+        total before the cashier actually closes out, without exposing
+        sum_cash_payments as its own endpoint."""
+        shift = self.shifts.get_open_shift(user_id, branch_id)
+        if shift is None:
+            return None
+        return shift, self.shifts.sum_cash_payments(shift.id)
+
     def close_shift(self, shift_id: uuid.UUID, counted_closing_cash: float) -> Shift:
         shift = self.shifts.get(shift_id)
         if shift is None:

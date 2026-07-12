@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { apiClient, apiErrorMessage } from '../api/client'
 import UpiQrPanel from '../components/UpiQrPanel'
 import type { CartLine, Customer, FeatureFlags, PaymentGatewayTransaction, PaymentLine, Product, SaleInvoice } from '../types'
@@ -60,12 +61,25 @@ export default function POSPage() {
   const [checkingCoupon, setCheckingCoupon] = useState(false)
   const [giftCardNumber, setGiftCardNumber] = useState('')
   const [giftCardAmount, setGiftCardAmount] = useState(0)
+  const [openShiftId, setOpenShiftId] = useState<string | null>(null)
 
   useEffect(() => {
     apiClient.get<Branch[]>('/org/branches').then((res) => setBranch(res.data[0] ?? null))
     apiClient.get<FeatureFlags>('/org/features').then((res) => setFeatures(res.data)).catch(() => setFeatures(null))
     barcodeRef.current?.focus()
   }, [])
+
+  useEffect(() => {
+    if (!branch) return
+    // Best-effort: a cashier without an open shift can still bill (this
+    // doesn't gate checkout), but a sale tagged with the current shift is
+    // what makes the Shift page's cash-drawer reconciliation reflect real
+    // sales instead of always reading zero.
+    apiClient
+      .get<{ id: string } | null>('/billing/shifts/current', { params: { branch_id: branch.id } })
+      .then((res) => setOpenShiftId(res.data?.id ?? null))
+      .catch(() => setOpenShiftId(null))
+  }, [branch])
 
   const warehouse = branch?.warehouses.find((w) => w.is_default) ?? branch?.warehouses[0]
 
@@ -226,6 +240,7 @@ export default function POSPage() {
         gift_card_number: giftCardNumber || null,
         gift_card_amount: giftCardNumber ? giftCardAmount : 0,
         payment_gateway_transaction_id: gatewayTransactionId ?? null,
+        shift_id: openShiftId,
       })
       setCompletedInvoice(res.data)
       setAutoPrint(Boolean(gatewayTransactionId))
@@ -268,6 +283,15 @@ export default function POSPage() {
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
       <div className="lg:col-span-2">
         <h1 className="mb-4 text-2xl font-semibold text-slate-900 dark:text-slate-50">Billing</h1>
+
+        {!openShiftId && (
+          <div className="mb-4 flex items-center justify-between rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+            <span>No shift open -- cash sales won't be reflected in cash-drawer reconciliation.</span>
+            <Link to="/shift" className="font-medium underline">
+              Open one
+            </Link>
+          </div>
+        )}
 
         <div className="relative mb-4">
           <input

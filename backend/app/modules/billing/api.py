@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.core.deps import require_permission
@@ -8,10 +8,45 @@ from app.core.exceptions import ConflictError, NotFoundError
 from app.core.permissions import Perm
 from app.db.session import get_db
 from app.models.rbac import User
-from app.modules.billing.schemas import ShiftCloseRequest, ShiftOpenRequest, ShiftResponse
+from app.modules.billing.schemas import ShiftCloseRequest, ShiftOpenRequest, ShiftResponse, ShiftSummaryResponse
 from app.modules.billing.service import ShiftService
 
 router = APIRouter(prefix="/api/v1/billing", tags=["billing"])
+
+
+@router.get("/shifts/current", response_model=ShiftSummaryResponse | None)
+def get_current_shift(
+    branch_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission(Perm.SHIFT_MANAGE)),
+):
+    current = ShiftService(db).current_shift(user.id, branch_id)
+    if current is None:
+        return None
+    shift, running_cash_sales = current
+    return ShiftSummaryResponse(
+        id=shift.id,
+        branch_id=shift.branch_id,
+        user_id=shift.user_id,
+        opened_at=shift.opened_at,
+        closed_at=shift.closed_at,
+        opening_cash=shift.opening_cash,
+        expected_closing_cash=shift.expected_closing_cash,
+        counted_closing_cash=shift.counted_closing_cash,
+        cash_variance=shift.cash_variance,
+        status=shift.status,
+        running_cash_sales=running_cash_sales,
+    )
+
+
+@router.get("/shifts", response_model=list[ShiftResponse])
+def list_shifts(
+    branch_id: uuid.UUID,
+    limit: int = Query(default=20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission(Perm.SHIFT_MANAGE)),
+):
+    return ShiftService(db).shifts.list(user.organization_id, branch_id, limit)
 
 
 @router.post("/shifts/open", response_model=ShiftResponse, status_code=status.HTTP_201_CREATED)
