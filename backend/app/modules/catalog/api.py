@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.core.deps import require_permission
@@ -9,6 +9,7 @@ from app.core.permissions import Perm
 from app.db.session import get_db
 from app.models.catalog import Product
 from app.models.rbac import User
+from app.modules.catalog.bulk_import import generate_product_import_template, parse_product_workbook
 from app.modules.catalog.labels import (
     InvalidLabelDataError,
     generate_barcode_png,
@@ -16,6 +17,8 @@ from app.modules.catalog.labels import (
     generate_qr_png,
 )
 from app.modules.catalog.schemas import (
+    BulkImportResponse,
+    BulkImportRowResult,
     CategoryCreateRequest,
     CategoryResponse,
     ComboComponentResponse,
@@ -181,6 +184,40 @@ def create_product(
         code = status.HTTP_404_NOT_FOUND if isinstance(exc, NotFoundError) else status.HTTP_422_UNPROCESSABLE_ENTITY
         raise HTTPException(code, str(exc)) from exc
     return _to_product_response(service, product)
+
+
+@router.get("/products/bulk-import/template")
+def download_bulk_import_template(user: User = Depends(require_permission(Perm.CATALOG_MANAGE))):
+    content = generate_product_import_template()
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=product-import-template.xlsx"},
+    )
+
+
+@router.post("/products/bulk-import", response_model=BulkImportResponse)
+async def bulk_import_products(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission(Perm.CATALOG_MANAGE)),
+):
+    content = await file.read()
+    try:
+        rows = parse_product_workbook(content)
+    except ValidationError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+    if not rows:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "The uploaded file has no product rows")
+
+    result = CatalogService(db).bulk_import_products(user.organization_id, rows)
+    return BulkImportResponse(
+        total=len(result.results),
+        created=result.created,
+        updated=result.updated,
+        failed=result.failed,
+        rows=[BulkImportRowResult(row=r.row_number, sku=r.sku, status=r.status, error=r.error) for r in result.results],
+    )
 
 
 @router.get("/products/{product_id}/barcode.png")

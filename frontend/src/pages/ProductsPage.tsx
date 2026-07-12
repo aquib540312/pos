@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { apiClient, apiErrorMessage } from '../api/client'
-import type { HSN, Product, UOM } from '../types'
+import type { BulkImportResponse, HSN, Product, UOM } from '../types'
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([])
@@ -12,6 +12,11 @@ export default function ProductsPage() {
   const [labelProduct, setLabelProduct] = useState<Product | null>(null)
   const [labelCopies, setLabelCopies] = useState(12)
   const [printingLabels, setPrintingLabels] = useState(false)
+  const [showBulkImport, setShowBulkImport] = useState(false)
+  const [bulkImportBusy, setBulkImportBusy] = useState(false)
+  const [bulkImportError, setBulkImportError] = useState<string | null>(null)
+  const [bulkImportResult, setBulkImportResult] = useState<BulkImportResponse | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [form, setForm] = useState({
     sku: '',
@@ -82,17 +87,121 @@ export default function ProductsPage() {
     }
   }
 
+  async function downloadBulkImportTemplate() {
+    const res = await apiClient.get('/catalog/products/bulk-import/template', { responseType: 'blob' })
+    const url = URL.createObjectURL(res.data as Blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'product-import-template.xlsx'
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
+  async function handleBulkImportFile(file: File) {
+    setBulkImportBusy(true)
+    setBulkImportError(null)
+    setBulkImportResult(null)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const res = await apiClient.post<BulkImportResponse>('/catalog/products/bulk-import', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      setBulkImportResult(res.data)
+      loadProducts(search)
+    } catch (err) {
+      setBulkImportError(apiErrorMessage(err))
+    } finally {
+      setBulkImportBusy(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-50">Products</h1>
-        <button
-          onClick={() => setShowForm((v) => !v)}
-          className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500"
-        >
-          {showForm ? 'Cancel' : '+ New Product'}
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => {
+              setShowBulkImport((v) => !v)
+              setBulkImportError(null)
+              setBulkImportResult(null)
+            }}
+            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
+          >
+            Bulk Upload (Excel)
+          </button>
+          <button
+            onClick={() => setShowForm((v) => !v)}
+            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500"
+          >
+            {showForm ? 'Cancel' : '+ New Product'}
+          </button>
+        </div>
       </div>
+
+      {showBulkImport && (
+        <div className="mb-6 rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-800">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm text-slate-600 dark:text-slate-300">
+              Upload an .xlsx file to create or update many products at once. A row with an existing SKU updates that
+              product; a new SKU creates one.
+            </p>
+            <button
+              onClick={downloadBulkImportTemplate}
+              className="whitespace-nowrap text-sm font-medium text-indigo-600 hover:text-indigo-500"
+            >
+              Download template
+            </button>
+          </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx"
+            disabled={bulkImportBusy}
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              if (file) handleBulkImportFile(file)
+            }}
+            className="block w-full text-sm text-slate-600 file:mr-4 file:rounded-lg file:border-0 file:bg-indigo-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white file:hover:bg-indigo-500 dark:text-slate-300"
+          />
+          {bulkImportBusy && <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">Uploading and processing...</p>}
+          {bulkImportError && <p className="mt-3 text-sm text-red-600 dark:text-red-400">{bulkImportError}</p>}
+          {bulkImportResult && (
+            <div className="mt-4">
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                {bulkImportResult.total} row(s): {bulkImportResult.created} created, {bulkImportResult.updated} updated,{' '}
+                {bulkImportResult.failed} failed.
+              </p>
+              {bulkImportResult.failed > 0 && (
+                <div className="mt-2 max-h-48 overflow-y-auto rounded-lg border border-red-200 dark:border-red-900">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300">
+                      <tr>
+                        <th className="px-3 py-2">Row</th>
+                        <th className="px-3 py-2">SKU</th>
+                        <th className="px-3 py-2">Error</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {bulkImportResult.rows
+                        .filter((r) => r.status === 'error')
+                        .map((r) => (
+                          <tr key={r.row} className="border-t border-red-100 dark:border-red-900">
+                            <td className="px-3 py-2">{r.row}</td>
+                            <td className="px-3 py-2">{r.sku ?? '-'}</td>
+                            <td className="px-3 py-2 text-red-700 dark:text-red-300">{r.error}</td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {showForm && (
         <form onSubmit={handleCreate} className="mb-6 grid grid-cols-2 gap-3 rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-800 md:grid-cols-4">

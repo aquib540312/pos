@@ -13,6 +13,21 @@ export interface Product {
   is_active: boolean
 }
 
+export interface BulkImportRowResult {
+  row: number
+  sku: string | null
+  status: 'created' | 'updated' | 'error'
+  error: string | null
+}
+
+export interface BulkImportResponse {
+  total: number
+  created: number
+  updated: number
+  failed: number
+  rows: BulkImportRowResult[]
+}
+
 export interface Customer {
   id: string
   name: string

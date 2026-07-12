@@ -16,6 +16,12 @@ class CategoryRepository:
     def list(self, organization_id: uuid.UUID) -> list[Category]:
         return list(self.db.execute(select(Category).where(Category.organization_id == organization_id)).scalars())
 
+    def get_by_name(self, organization_id: uuid.UUID, name: str) -> Category | None:
+        stmt = select(Category).where(
+            Category.organization_id == organization_id, Category.name == name, Category.parent_id.is_(None)
+        )
+        return self.db.execute(stmt).scalars().first()
+
     def add(self, category: Category) -> Category:
         self.db.add(category)
         self.db.flush()
@@ -36,6 +42,10 @@ class UOMRepository:
         self.db.flush()
         return uom
 
+    def get_by_code(self, organization_id: uuid.UUID, code: str) -> UnitOfMeasure | None:
+        stmt = select(UnitOfMeasure).where(UnitOfMeasure.organization_id == organization_id, UnitOfMeasure.code == code)
+        return self.db.execute(stmt).scalars().first()
+
 
 class HSNRepository:
     def __init__(self, db: Session):
@@ -46,6 +56,10 @@ class HSNRepository:
 
     def get(self, hsn_id: uuid.UUID) -> HSNCode | None:
         return self.db.get(HSNCode, hsn_id)
+
+    def get_by_code(self, organization_id: uuid.UUID, code: str) -> HSNCode | None:
+        stmt = select(HSNCode).where(HSNCode.organization_id == organization_id, HSNCode.code == code)
+        return self.db.execute(stmt).scalars().first()
 
     def add(self, hsn: HSNCode) -> HSNCode:
         self.db.add(hsn)

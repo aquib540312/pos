@@ -81,6 +81,21 @@ class ComboComponentResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class BulkImportRowResult(BaseModel):
+    row: int
+    sku: str | None
+    status: str
+    error: str | None = None
+
+
+class BulkImportResponse(BaseModel):
+    total: int
+    created: int
+    updated: int
+    failed: int
+    rows: list[BulkImportRowResult]
+
+
 class ProductResponse(BaseModel):
     id: uuid.UUID
     sku: str
