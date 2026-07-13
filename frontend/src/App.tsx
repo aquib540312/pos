@@ -12,6 +12,7 @@ import ShiftPage from './pages/ShiftPage'
 import StaffPage from './pages/StaffPage'
 import SuppliersPage from './pages/SuppliersPage'
 import PurchasingPage from './pages/PurchasingPage'
+import StockTransferPage from './pages/StockTransferPage'
 
 export default function App() {
   return (
@@ -27,6 +28,7 @@ export default function App() {
             <Route path="/customers" element={<CustomersPage />} />
             <Route path="/suppliers" element={<SuppliersPage />} />
             <Route path="/purchasing" element={<PurchasingPage />} />
+            <Route path="/stock-transfer" element={<StockTransferPage />} />
             <Route path="/staff" element={<StaffPage />} />
             <Route path="/sync" element={<SyncDashboardPage />} />
             <Route path="/reports" element={<ReportsPage />} />
