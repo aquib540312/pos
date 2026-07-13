@@ -13,6 +13,7 @@ import StaffPage from './pages/StaffPage'
 import SuppliersPage from './pages/SuppliersPage'
 import PurchasingPage from './pages/PurchasingPage'
 import StockTransferPage from './pages/StockTransferPage'
+import BranchesPage from './pages/BranchesPage'
 
 export default function App() {
   return (
@@ -30,6 +31,7 @@ export default function App() {
             <Route path="/purchasing" element={<PurchasingPage />} />
             <Route path="/stock-transfer" element={<StockTransferPage />} />
             <Route path="/staff" element={<StaffPage />} />
+            <Route path="/branches" element={<BranchesPage />} />
             <Route path="/sync" element={<SyncDashboardPage />} />
             <Route path="/reports" element={<ReportsPage />} />
           </Route>

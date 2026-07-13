@@ -1,13 +1,23 @@
-from fastapi import APIRouter, Depends
+import uuid
+
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import get_settings
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, require_permission
+from app.core.exceptions import ConflictError, NotFoundError
+from app.core.permissions import Perm
 from app.db.session import get_db
 from app.models.organization import Branch
 from app.models.rbac import User
-from app.modules.organizations.schemas import BranchResponse
+from app.modules.organizations.schemas import (
+    BranchCreateRequest,
+    BranchResponse,
+    WarehouseCreateRequest,
+    WarehouseResponse,
+)
+from app.modules.organizations.service import OrganizationService
 from app.modules.payments.schemas import FeatureFlagsResponse
 
 router = APIRouter(prefix="/api/v1/org", tags=["organizations"])
@@ -21,6 +31,47 @@ def list_branches(db: Session = Depends(get_db), user: User = Depends(get_curren
         .options(selectinload(Branch.warehouses))
     )
     return list(db.execute(stmt).scalars())
+
+
+@router.post("/branches", response_model=BranchResponse, status_code=status.HTTP_201_CREATED)
+def create_branch(
+    payload: BranchCreateRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission(Perm.ORG_MANAGE)),
+):
+    try:
+        branch = OrganizationService(db).create_branch(
+            user.organization_id, payload.code, payload.name, payload.business_type,
+            payload.state_code, payload.gstin, payload.address,
+        )
+        db.commit()
+    except ConflictError as exc:
+        db.rollback()
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    return branch
+
+
+@router.post(
+    "/branches/{branch_id}/warehouses", response_model=WarehouseResponse, status_code=status.HTTP_201_CREATED
+)
+def create_warehouse(
+    branch_id: uuid.UUID,
+    payload: WarehouseCreateRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission(Perm.ORG_MANAGE)),
+):
+    try:
+        warehouse = OrganizationService(db).create_warehouse(
+            user.organization_id, branch_id, payload.code, payload.name, payload.is_default
+        )
+        db.commit()
+    except NotFoundError as exc:
+        db.rollback()
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
+    except ConflictError as exc:
+        db.rollback()
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    return warehouse
 
 
 @router.get("/features", response_model=FeatureFlagsResponse)
