@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { to: '/stock-transfer', label: 'Stock Transfer' },
   { to: '/staff', label: 'Staff' },
   { to: '/branches', label: 'Branches & Warehouses' },
+  { to: '/audit-log', label: 'Audit Log' },
   { to: '/reports', label: 'Reports' },
   { to: '/sync', label: 'Sync Status' },
 ]

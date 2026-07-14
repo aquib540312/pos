@@ -14,6 +14,7 @@ import SuppliersPage from './pages/SuppliersPage'
 import PurchasingPage from './pages/PurchasingPage'
 import StockTransferPage from './pages/StockTransferPage'
 import BranchesPage from './pages/BranchesPage'
+import AuditLogPage from './pages/AuditLogPage'
 
 export default function App() {
   return (
@@ -32,6 +33,7 @@ export default function App() {
             <Route path="/stock-transfer" element={<StockTransferPage />} />
             <Route path="/staff" element={<StaffPage />} />
             <Route path="/branches" element={<BranchesPage />} />
+            <Route path="/audit-log" element={<AuditLogPage />} />
             <Route path="/sync" element={<SyncDashboardPage />} />
             <Route path="/reports" element={<ReportsPage />} />
           </Route>
