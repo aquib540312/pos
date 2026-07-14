@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from sqlalchemy.orm import Session
 
@@ -9,7 +9,7 @@ from app.models.billing import Payment
 from app.models.catalog import Product
 from app.models.organization import Branch
 from app.models.payments import PaymentGatewayTransaction
-from app.models.sales import SalesInvoice, SalesInvoiceItem, SalesReturn, SalesReturnItem
+from app.models.sales import Quotation, QuotationItem, SalesInvoice, SalesInvoiceItem, SalesReturn, SalesReturnItem
 from app.modules.accounting.service import AccountingService
 from app.modules.catalog.repository import HSNRepository, ProductRepository
 from app.modules.gst.service import compute_line_tax, is_inter_state_supply, round_invoice_total
@@ -17,7 +17,7 @@ from app.modules.inventory.service import InventoryService
 from app.modules.loyalty.service import CouponService, GiftCardService, LoyaltyService
 from app.modules.party.repository import CustomerRepository
 from app.modules.party.service import PartyService
-from app.modules.sales.repository import SalesInvoiceRepository, SalesReturnRepository
+from app.modules.sales.repository import QuotationRepository, SalesInvoiceRepository, SalesReturnRepository
 
 
 class SalesService:
@@ -371,3 +371,136 @@ class SalesService:
         self.accounting.post_sales_return(sales_return)
         self.db.flush()
         return sales_return
+
+
+class QuotationService:
+    """A quotation is a lightweight, non-binding price estimate -- unlike
+    SalesInvoice it carries no per-line GST breakdown (see the
+    Quotation/QuotationItem model: no hsn_code_id, no cgst/sgst/igst
+    columns) and never touches stock or the ledger. Converting one to a
+    real sale hands its items to SalesService.create_sale as the starting
+    cart; from that point on it's an ordinary sale (subject to live stock
+    availability, GST, payments) -- the quotation just records which
+    invoice it became.
+    """
+
+    def __init__(self, db: Session):
+        self.db = db
+        self.quotations = QuotationRepository(db)
+        self.products = ProductRepository(db)
+
+    def create_quotation(
+        self,
+        organization_id: uuid.UUID,
+        branch_id: uuid.UUID,
+        customer_id: uuid.UUID | None,
+        quotation_date: date,
+        valid_until: date | None,
+        items: list[dict],
+    ) -> Quotation:
+        quotation = Quotation(
+            organization_id=organization_id,
+            branch_id=branch_id,
+            customer_id=customer_id,
+            quotation_number=next_document_number(self.db, Quotation, "QUO"),
+            quotation_date=quotation_date,
+            valid_until=valid_until,
+            status="draft",
+        )
+        self.quotations.add(quotation)
+
+        grand_total = 0.0
+        for line in items:
+            product = self.products.get(line["product_id"])
+            if product is None:
+                raise NotFoundError(f"Product {line['product_id']} not found")
+
+            unit_price = line.get("unit_price") if line.get("unit_price") is not None else float(product.sale_price)
+            discount = line.get("discount_amount", 0)
+            quantity = line["quantity"]
+            line_total = round(quantity * unit_price - discount, 2)
+            if line_total < 0:
+                raise ValidationError(f"Discount cannot exceed line value for product '{product.name}'")
+
+            self.quotations.add_item(
+                QuotationItem(
+                    quotation_id=quotation.id,
+                    product_id=product.id,
+                    quantity=quantity,
+                    unit_price=unit_price,
+                    discount_amount=discount,
+                    line_total=line_total,
+                )
+            )
+            grand_total += line_total
+
+        quotation.grand_total = round(grand_total, 2)
+        self.db.flush()
+        return self.quotations.get(quotation.id)
+
+    def get_quotation_or_404(self, quotation_id: uuid.UUID) -> Quotation:
+        quotation = self.quotations.get(quotation_id)
+        if quotation is None:
+            raise NotFoundError(f"Quotation {quotation_id} not found")
+        return quotation
+
+    def mark_sent(self, quotation_id: uuid.UUID) -> Quotation:
+        quotation = self.get_quotation_or_404(quotation_id)
+        if quotation.status != "draft":
+            raise ConflictError(f"Quotation {quotation.quotation_number} is not in draft status")
+        quotation.status = "sent"
+        self.db.flush()
+        return quotation
+
+    def mark_expired(self, quotation_id: uuid.UUID) -> Quotation:
+        quotation = self.get_quotation_or_404(quotation_id)
+        if quotation.status not in ("draft", "sent"):
+            raise ConflictError(
+                f"Quotation {quotation.quotation_number} cannot be marked expired from status '{quotation.status}'"
+            )
+        quotation.status = "expired"
+        self.db.flush()
+        return quotation
+
+    def convert_to_sale(
+        self,
+        sales_service: "SalesService",
+        organization_id: uuid.UUID,
+        quotation_id: uuid.UUID,
+        warehouse_id: uuid.UUID,
+        shift_id: uuid.UUID | None,
+        payments: list[dict],
+        is_credit_sale: bool,
+    ) -> SalesInvoice:
+        quotation = self.get_quotation_or_404(quotation_id)
+        if quotation.status not in ("draft", "sent"):
+            raise ConflictError(
+                f"Quotation {quotation.quotation_number} cannot be converted from status '{quotation.status}'"
+            )
+        if quotation.valid_until is not None and quotation.valid_until < date.today():
+            raise ValidationError(f"Quotation {quotation.quotation_number} expired on {quotation.valid_until}")
+
+        items = [
+            {
+                "product_id": item.product_id,
+                "quantity": float(item.quantity),
+                "unit_price": float(item.unit_price),
+                "discount_amount": float(item.discount_amount),
+            }
+            for item in quotation.items
+        ]
+        invoice = sales_service.create_sale(
+            organization_id=organization_id,
+            branch_id=quotation.branch_id,
+            warehouse_id=warehouse_id,
+            customer_id=quotation.customer_id,
+            shift_id=shift_id,
+            items=items,
+            payments=payments,
+            redeem_loyalty_points=0,
+            is_credit_sale=is_credit_sale,
+        )
+        quotation.status = "converted"
+        quotation.converted_invoice_id = invoice.id
+        self.db.flush()
+        return invoice

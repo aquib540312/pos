@@ -18,12 +18,15 @@ from app.db.session import get_db
 from app.models.rbac import User
 from app.modules.notifications.tasks import send_notification_task
 from app.modules.sales.schemas import (
+    QuotationConvertRequest,
+    QuotationCreateRequest,
+    QuotationResponse,
     ReturnCreateRequest,
     ReturnResponse,
     SaleCreateRequest,
     SaleInvoiceResponse,
 )
-from app.modules.sales.service import SalesService
+from app.modules.sales.service import QuotationService, SalesService
 
 router = APIRouter(prefix="/api/v1/sales", tags=["sales"])
 logger = logging.getLogger("app.sales")
@@ -65,6 +68,104 @@ def _dispatch_receipt_sms(service: SalesService, invoice) -> None:
 @router.get("", response_model=list[SaleInvoiceResponse])
 def list_sales(db: Session = Depends(get_db), user: User = Depends(require_permission(Perm.REPORTS_VIEW))):
     return SalesService(db).invoices.list(user.organization_id)
+
+
+# Quotation routes are declared here, before /{invoice_id} -- FastAPI/
+# Starlette matches path routes by declaration order, not by the
+# eventual UUID type-coercion of a dynamic segment, so "/quotations"
+# would otherwise be captured by /{invoice_id} first and fail UUID
+# validation (422) instead of ever reaching these handlers.
+@router.get("/quotations", response_model=list[QuotationResponse])
+def list_quotations(db: Session = Depends(get_db), user: User = Depends(require_permission(Perm.QUOTATION_CREATE))):
+    return QuotationService(db).quotations.list(user.organization_id)
+
+
+@router.get("/quotations/{quotation_id}", response_model=QuotationResponse)
+def get_quotation(
+    quotation_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission(Perm.QUOTATION_CREATE)),
+):
+    try:
+        return QuotationService(db).get_quotation_or_404(quotation_id)
+    except DomainError as exc:
+        _handle(exc, db)
+
+
+@router.post("/quotations", response_model=QuotationResponse, status_code=status.HTTP_201_CREATED)
+def create_quotation(
+    payload: QuotationCreateRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission(Perm.QUOTATION_CREATE)),
+):
+    try:
+        quotation = QuotationService(db).create_quotation(
+            organization_id=user.organization_id,
+            branch_id=payload.branch_id,
+            customer_id=payload.customer_id,
+            quotation_date=payload.quotation_date,
+            valid_until=payload.valid_until,
+            items=[i.model_dump() for i in payload.items],
+        )
+        db.commit()
+    except DomainError as exc:
+        _handle(exc, db)
+    return quotation
+
+
+@router.post("/quotations/{quotation_id}/send", response_model=QuotationResponse)
+def send_quotation(
+    quotation_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission(Perm.QUOTATION_CREATE)),
+):
+    try:
+        quotation = QuotationService(db).mark_sent(quotation_id)
+        db.commit()
+    except DomainError as exc:
+        _handle(exc, db)
+    return quotation
+
+
+@router.post("/quotations/{quotation_id}/expire", response_model=QuotationResponse)
+def expire_quotation(
+    quotation_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission(Perm.QUOTATION_CREATE)),
+):
+    try:
+        quotation = QuotationService(db).mark_expired(quotation_id)
+        db.commit()
+    except DomainError as exc:
+        _handle(exc, db)
+    return quotation
+
+
+@router.post(
+    "/quotations/{quotation_id}/convert", response_model=SaleInvoiceResponse, status_code=status.HTTP_201_CREATED
+)
+def convert_quotation(
+    quotation_id: uuid.UUID,
+    payload: QuotationConvertRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission(Perm.QUOTATION_CREATE)),
+):
+    sales_service = SalesService(db)
+    try:
+        invoice = QuotationService(db).convert_to_sale(
+            sales_service=sales_service,
+            organization_id=user.organization_id,
+            quotation_id=quotation_id,
+            warehouse_id=payload.warehouse_id,
+            shift_id=payload.shift_id,
+            payments=[p.model_dump() for p in payload.payments],
+            is_credit_sale=payload.is_credit_sale,
+        )
+        db.commit()
+    except DomainError as exc:
+        _handle(exc, db)
+    _dispatch_receipt_sms(sales_service, invoice)
+    return invoice
 
 
 @router.get("/{invoice_id}", response_model=SaleInvoiceResponse)

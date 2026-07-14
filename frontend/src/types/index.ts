@@ -85,6 +85,28 @@ export interface GoodsReceipt {
   items: GoodsReceiptItem[]
 }
 
+export interface QuotationItem {
+  id: string
+  product_id: string
+  quantity: number
+  unit_price: number
+  discount_amount: number
+  line_total: number
+}
+
+export interface Quotation {
+  id: string
+  quotation_number: string
+  branch_id: string
+  customer_id: string | null
+  quotation_date: string
+  valid_until: string | null
+  status: 'draft' | 'sent' | 'converted' | 'expired'
+  grand_total: number
+  converted_invoice_id: string | null
+  items: QuotationItem[]
+}
+
 export interface UOM {
   id: string
   code: string

@@ -23,6 +23,11 @@ class Quotation(Base, UUIDPKMixin, TimestampMixin):
     valid_until: Mapped[date | None] = mapped_column(Date)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="draft")  # draft|sent|converted|expired
     grand_total: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
+    # Set only once status becomes "converted" -- traces which real sale
+    # this quotation turned into (see QuotationService.convert_to_sale).
+    converted_invoice_id: Mapped[uuid.UUID | None] = mapped_column(
+        GUID(), ForeignKey("sales_invoices.id"), nullable=True
+    )
 
     items: Mapped[list["QuotationItem"]] = relationship(back_populates="quotation")
 

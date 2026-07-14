@@ -5,7 +5,7 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from app.models.sales import SalesInvoice, SalesInvoiceItem, SalesReturn
+from app.models.sales import Quotation, QuotationItem, SalesInvoice, SalesInvoiceItem, SalesReturn
 
 
 class SalesInvoiceRepository:
@@ -56,3 +56,31 @@ class SalesReturnRepository:
     def get(self, return_id: uuid.UUID) -> SalesReturn | None:
         stmt = select(SalesReturn).where(SalesReturn.id == return_id).options(selectinload(SalesReturn.items))
         return self.db.execute(stmt).scalars().first()
+
+
+class QuotationRepository:
+    def __init__(self, db: Session):
+        self.db = db
+
+    def add(self, quotation: Quotation) -> Quotation:
+        self.db.add(quotation)
+        self.db.flush()
+        return quotation
+
+    def add_item(self, item: QuotationItem) -> QuotationItem:
+        self.db.add(item)
+        self.db.flush()
+        return item
+
+    def get(self, quotation_id: uuid.UUID) -> Quotation | None:
+        stmt = select(Quotation).where(Quotation.id == quotation_id).options(selectinload(Quotation.items))
+        return self.db.execute(stmt).scalars().first()
+
+    def list(self, organization_id: uuid.UUID) -> list[Quotation]:
+        stmt = (
+            select(Quotation)
+            .where(Quotation.organization_id == organization_id)
+            .options(selectinload(Quotation.items))
+            .order_by(Quotation.quotation_date.desc())
+        )
+        return list(self.db.execute(stmt).scalars())

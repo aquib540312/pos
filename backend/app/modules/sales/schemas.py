@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, Field
 
@@ -116,3 +116,51 @@ class ReturnResponse(BaseModel):
     refund_mode: str
 
     model_config = {"from_attributes": True}
+
+
+class QuotationLineRequest(BaseModel):
+    product_id: uuid.UUID
+    quantity: float = Field(gt=0)
+    unit_price: float | None = Field(default=None, ge=0, description="Overrides product.sale_price if provided")
+    discount_amount: float = Field(default=0, ge=0)
+
+
+class QuotationCreateRequest(BaseModel):
+    branch_id: uuid.UUID
+    customer_id: uuid.UUID | None = None
+    quotation_date: date
+    valid_until: date | None = None
+    items: list[QuotationLineRequest] = Field(min_length=1)
+
+
+class QuotationItemResponse(BaseModel):
+    id: uuid.UUID
+    product_id: uuid.UUID
+    quantity: float
+    unit_price: float
+    discount_amount: float
+    line_total: float
+
+    model_config = {"from_attributes": True}
+
+
+class QuotationResponse(BaseModel):
+    id: uuid.UUID
+    quotation_number: str
+    branch_id: uuid.UUID
+    customer_id: uuid.UUID | None
+    quotation_date: date
+    valid_until: date | None
+    status: str
+    grand_total: float
+    converted_invoice_id: uuid.UUID | None
+    items: list[QuotationItemResponse]
+
+    model_config = {"from_attributes": True}
+
+
+class QuotationConvertRequest(BaseModel):
+    warehouse_id: uuid.UUID
+    shift_id: uuid.UUID | None = None
+    payments: list[PaymentRequest] = Field(default_factory=list)
+    is_credit_sale: bool = False
