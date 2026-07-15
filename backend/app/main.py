@@ -20,6 +20,7 @@ from app.modules.purchasing.api import router as purchasing_router
 from app.modules.rbac.api import router as rbac_router
 from app.modules.reports.api import router as reports_router
 from app.modules.sales.api import router as sales_router
+from app.modules.subscriptions.api import router as subscriptions_router
 from app.modules.sync.api import router as sync_router
 
 # Without this, the root logger's default level (WARNING) silently drops
@@ -60,6 +61,7 @@ for router in (
     gst_filing_router,
     audit_router,
     sync_router,
+    subscriptions_router,
 ):
     app.include_router(router)
 

@@ -305,3 +305,23 @@ export interface SaleInvoice {
   items: SaleInvoiceItem[]
   payments: PaymentResponse[]
 }
+
+export interface Plan {
+  id: string
+  code: string
+  name: string
+  price_monthly: number
+  max_branches: number | null
+  max_users: number | null
+}
+
+export interface Subscription {
+  id: string
+  plan: Plan
+  status: 'trialing' | 'active' | 'past_due' | 'canceled'
+  trial_ends_at: string | null
+  current_period_end: string | null
+  cancel_at_period_end: boolean
+  branches_used: number
+  users_used: number
+}

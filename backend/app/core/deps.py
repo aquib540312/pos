@@ -1,5 +1,5 @@
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -10,9 +10,15 @@ from app.models.rbac import Permission, Role, RolePermission, User, UserRole
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
+# A locked-out org must still be able to log in, see its own subscription,
+# pay to reactivate, and sign the very first user up -- exempting these
+# prefixes from the gate below avoids a deadlock where the only way out
+# of "past_due" is itself blocked by being "past_due".
+_SUBSCRIPTION_GATE_EXEMPT_PREFIXES = ("/api/v1/auth", "/api/v1/subscriptions")
+
 
 def get_current_user(
-    db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)
+    request: Request, db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)
 ) -> User:
     payload = decode_access_token(token)
     if payload is None or "sub" not in payload:
@@ -20,6 +26,13 @@ def get_current_user(
     user = db.get(User, payload["sub"])
     if user is None or not user.is_active:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "User not found or inactive")
+    if not request.url.path.startswith(_SUBSCRIPTION_GATE_EXEMPT_PREFIXES):
+        from app.modules.subscriptions.service import SubscriptionService
+
+        if SubscriptionService(db).is_locked_out(user.organization_id):
+            raise HTTPException(
+                status.HTTP_402_PAYMENT_REQUIRED, "Subscription inactive -- update billing to continue"
+            )
     return user
 
 

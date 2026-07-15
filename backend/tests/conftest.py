@@ -17,6 +17,7 @@ from app.db.base import Base  # noqa: E402
 from app.db.session import get_db  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models.organization import Branch, Organization, Warehouse  # noqa: E402
+from app.models.subscriptions import Plan  # noqa: E402
 from app.modules.auth.service import AuthService  # noqa: E402
 from app.modules.catalog.service import CatalogService  # noqa: E402
 from app.modules.rbac.repository import PermissionRepository  # noqa: E402
@@ -33,6 +34,16 @@ def db_session():
     Base.metadata.create_all(engine)
     session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
     session = session_factory()
+    # Mirrors the Plan rows seeded by the "add plans, subscriptions,
+    # password reset tokens" Alembic migration -- tests build the schema
+    # straight from the models (create_all), bypassing migrations
+    # entirely, so reference data has to be re-seeded here too.
+    session.add_all([
+        Plan(code="starter", name="Starter", price_monthly=999, max_branches=1, max_users=3),
+        Plan(code="growth", name="Growth", price_monthly=2999, max_branches=5, max_users=15),
+        Plan(code="enterprise", name="Enterprise", price_monthly=9999, max_branches=None, max_users=None),
+    ])
+    session.commit()
     yield session
     session.close()
     engine.dispose()

@@ -13,14 +13,17 @@ The Flow API call here assumes a template registered on your MSG91
 dashboard with a single `{{VAR1}}` placeholder; `flow_id` (POS_MSG91_FLOW_ID)
 must point at that template once you have a real account.
 
-WhatsApp and Email remain stubbed (LoggingAdapter) -- see ROADMAP.md for
-the WhatsApp Business API / BSP and SMTP provider choices still needed.
-Swapping in a real provider for either means implementing
-`NotificationAdapter` and adding a branch in `_resolve_adapter`, not
-touching any calling code.
+Email uses plain SMTP (SMTPEmailAdapter below) -- works against any
+standard provider (SES, Postmark, Gmail app password) once
+POS_SMTP_HOST/etc are set. WhatsApp remains stubbed (LoggingAdapter) --
+see ROADMAP.md for the WhatsApp Business API / BSP choice still needed.
+Swapping in a real provider means implementing `NotificationAdapter` and
+adding a branch in `_resolve_adapter`, not touching any calling code.
 """
 
 import logging
+import smtplib
+from email.message import EmailMessage
 from typing import Protocol
 
 import httpx
@@ -75,9 +78,46 @@ class MSG91Adapter:
             logger.warning("MSG91 send failed: %s", exc)
 
 
+class SMTPEmailAdapter:
+    """Plain SMTP (STARTTLS) sender -- works against any standard provider
+    (SES, Postmark, Gmail app password) without a provider-specific SDK.
+    Like MSG91Adapter, a delivery failure is logged, never raised: a
+    password-reset email that fails to send must not surface as a 500 to
+    a user who already got a 200 telling them "check your email"."""
+
+    def __init__(self, host: str, port: int, username: str, password: str, from_email: str, use_tls: bool):
+        self.host = host
+        self.port = port
+        self.username = username
+        self.password = password
+        self.from_email = from_email
+        self.use_tls = use_tls
+
+    def send(self, to: str, message: str) -> None:
+        email = EmailMessage()
+        email["Subject"] = "Notification"
+        email["From"] = self.from_email
+        email["To"] = to
+        email.set_content(message)
+        try:
+            with smtplib.SMTP(self.host, self.port, timeout=10.0) as smtp:
+                if self.use_tls:
+                    smtp.starttls()
+                if self.username:
+                    smtp.login(self.username, self.password)
+                smtp.send_message(email)
+        except (smtplib.SMTPException, OSError) as exc:
+            logger.warning("SMTP send failed: %s", exc)
+
+
 def _resolve_adapter(channel: str, settings: Settings) -> NotificationAdapter:
     if channel == "sms" and settings.msg91_auth_key and settings.msg91_flow_id:
         return MSG91Adapter(settings.msg91_auth_key, settings.msg91_flow_id, settings.msg91_sender_id)
+    if channel == "email" and settings.smtp_host:
+        return SMTPEmailAdapter(
+            settings.smtp_host, settings.smtp_port, settings.smtp_username,
+            settings.smtp_password, settings.smtp_from_email, settings.smtp_use_tls,
+        )
     return LoggingAdapter(channel)
 
 

@@ -11,6 +11,9 @@ from app.db.session import get_db
 from app.models.rbac import User
 from app.modules.audit.service import write_audit_log
 from app.modules.auth.schemas import (
+    ForgotPasswordRequest,
+    ResetPasswordRequest,
+    SignupRequest,
     TokenResponse,
     UserActiveUpdateRequest,
     UserCreateRequest,
@@ -42,6 +45,55 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, str(exc)) from exc
     db.commit()
     return TokenResponse(access_token=token)
+
+
+@router.post("/signup", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+def signup(payload: SignupRequest, db: Session = Depends(get_db)) -> TokenResponse:
+    """Public -- no auth required, this is how a brand new tenant comes
+    into existence. See AuthService.signup for exactly what gets created."""
+    try:
+        _, token = AuthService(db).signup(
+            legal_name=payload.legal_name,
+            trade_name=payload.trade_name,
+            default_state_code=payload.default_state_code,
+            gstin=payload.gstin,
+            branch_code=payload.branch_code,
+            branch_name=payload.branch_name,
+            admin_full_name=payload.admin_full_name,
+            admin_email=payload.admin_email,
+            admin_password=payload.admin_password,
+            admin_phone=payload.admin_phone,
+            plan_code=payload.plan_code,
+        )
+        db.commit()
+    except ConflictError as exc:
+        db.rollback()
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    except (NotFoundError, ValidationError) as exc:
+        db.rollback()
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+    return TokenResponse(access_token=token)
+
+
+@router.post("/forgot-password", status_code=status.HTTP_202_ACCEPTED)
+def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db)) -> dict[str, str]:
+    """Public. Always returns the same generic response regardless of
+    whether the email matches an account -- see AuthService.request_password_reset."""
+    AuthService(db).request_password_reset(payload.email)
+    db.commit()
+    return {"status": "If that email is registered, a reset link has been sent."}
+
+
+@router.post("/reset-password", status_code=status.HTTP_200_OK)
+def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db)) -> dict[str, str]:
+    """Public -- the token itself, not a session, is the authorization here."""
+    try:
+        AuthService(db).reset_password(payload.token, payload.new_password)
+        db.commit()
+    except ValidationError as exc:
+        db.rollback()
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+    return {"status": "Password updated. You can now log in."}
 
 
 @router.get("/me", response_model=UserResponse)
@@ -78,6 +130,9 @@ def create_user(
     except ConflictError as exc:
         db.rollback()
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    except ValidationError as exc:
+        db.rollback()
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
     return _to_user_response(user)
 
 

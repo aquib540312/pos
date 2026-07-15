@@ -41,6 +41,30 @@ class Settings(BaseSettings):
     msg91_sender_id: str = "POSAPP"
     msg91_flow_id: str = ""
 
+    # -- Email (SMTP) ---------------------------------------------------
+    # Leave smtp_host blank to keep the "email" notification channel on
+    # the logging adapter (safe default for dev/CI -- password-reset links
+    # are still generated correctly, just logged instead of emailed).
+    # Any standard SMTP provider works (SES, Postmark, Gmail app password).
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from_email: str = "noreply@example.invalid"
+    smtp_use_tls: bool = True
+
+    # -- SaaS subscription billing (Razorpay Subscriptions) -------------
+    # "mock" instantly marks a checkout as paid/active so the full
+    # signup -> trial -> subscribe -> renew loop is exercisable end-to-end
+    # without a live Razorpay account (same reasoning as gsp_provider
+    # above); switch to "razorpay" once real razorpay_key_id/secret and
+    # each Plan's razorpay_plan_id are set.
+    subscription_provider: str = "mock"
+    trial_period_days: int = 14
+    # Frontend origin the signup/billing pages send the browser back to
+    # after a hosted Razorpay checkout completes.
+    frontend_base_url: str = "http://localhost:5173"
+
     # -- Thermal receipt printer (Epson ESC/POS over network) ---------
     # Epson TM-series and most ESC/POS-compatible printers listen on raw
     # TCP port 9100. Point this at the real printer's LAN IP; leave the

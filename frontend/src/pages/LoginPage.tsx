@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { apiClient, apiErrorMessage } from '../api/client'
 import { useAuthStore } from '../store/auth'
 
@@ -73,6 +73,15 @@ export default function LoginPage() {
         >
           {loading ? 'Signing in...' : 'Sign in'}
         </button>
+
+        <div className="mt-4 flex justify-between text-sm">
+          <Link to="/forgot-password" className="font-medium text-indigo-600 hover:text-indigo-500">
+            Forgot password?
+          </Link>
+          <Link to="/signup" className="font-medium text-indigo-600 hover:text-indigo-500">
+            Start free trial
+          </Link>
+        </div>
       </form>
     </div>
   )

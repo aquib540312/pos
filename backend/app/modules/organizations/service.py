@@ -1,15 +1,32 @@
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.core.exceptions import ConflictError, NotFoundError
+from app.core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.models.organization import Branch, Warehouse
+from app.modules.subscriptions.repository import SubscriptionRepository
 
 
 class OrganizationService:
     def __init__(self, db: Session):
         self.db = db
+
+    def _enforce_branch_limit(self, organization_id: uuid.UUID) -> None:
+        """No-op for orgs without a Subscription row (legacy/seeded/test
+        orgs, grandfathered -- see core/deps.get_current_user) or on the
+        Enterprise plan (max_branches is None = unlimited)."""
+        subscription = SubscriptionRepository(self.db).get_by_org(organization_id)
+        if subscription is None or subscription.plan.max_branches is None:
+            return
+        current_count = self.db.execute(
+            select(func.count()).select_from(Branch).where(Branch.organization_id == organization_id)
+        ).scalar_one()
+        if current_count >= subscription.plan.max_branches:
+            raise ValidationError(
+                f"Plan '{subscription.plan.name}' allows at most {subscription.plan.max_branches} branches; "
+                "upgrade your plan to add more"
+            )
 
     def create_branch(
         self,
@@ -24,6 +41,7 @@ class OrganizationService:
         stmt = select(Branch).where(Branch.organization_id == organization_id, Branch.code == code)
         if self.db.execute(stmt).scalars().first() is not None:
             raise ConflictError(f"Branch code '{code}' already exists")
+        self._enforce_branch_limit(organization_id)
         branch = Branch(
             organization_id=organization_id,
             code=code,
