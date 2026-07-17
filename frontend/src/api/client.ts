@@ -13,9 +13,25 @@ import { useAuthStore } from '../store/auth'
 // a resolvable domain on its own. The browser running this bundle has no
 // access to Render's private network at all; it needs the real public
 // hostname, which is that same slug with .onrender.com appended.
-const apiBaseUrl = import.meta.env.VITE_API_HOST
-  ? `https://${import.meta.env.VITE_API_HOST}.onrender.com/api/v1`
-  : '/api/v1'
+//
+// The Electron desktop shell (see desktop/) has no reverse proxy in front
+// of it either, but unlike Render its backend URL isn't known at build
+// time -- one installer gets used against whichever branch's backend a
+// shop points it at, configured at runtime through the desktop shell's
+// settings window. Its preload script exposes that as
+// window.__POS_DESKTOP__.apiBaseUrl before this module ever runs, so it
+// takes priority over the build-time envs below.
+declare global {
+  interface Window {
+    __POS_DESKTOP__?: { apiBaseUrl?: string }
+  }
+}
+
+const apiBaseUrl =
+  window.__POS_DESKTOP__?.apiBaseUrl ||
+  (import.meta.env.VITE_API_HOST
+    ? `https://${import.meta.env.VITE_API_HOST}.onrender.com/api/v1`
+    : '/api/v1')
 
 export const apiClient = axios.create({
   baseURL: apiBaseUrl,

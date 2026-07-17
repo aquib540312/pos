@@ -10,6 +10,8 @@ export default function CustomersPage() {
   const [form, setForm] = useState({
     name: '',
     phone: '',
+    gstin: '',
+    stateCode: '',
     isCredit: false,
     creditLimit: '',
   })
@@ -30,10 +32,12 @@ export default function CustomersPage() {
       await apiClient.post('/party/customers', {
         name: form.name,
         phone: form.phone || null,
+        gstin: form.gstin || null,
+        state_code: form.stateCode || null,
         is_credit_customer: form.isCredit,
         credit_limit: form.isCredit ? Number(form.creditLimit || 0) : 0,
       })
-      setForm({ name: '', phone: '', isCredit: false, creditLimit: '' })
+      setForm({ name: '', phone: '', gstin: '', stateCode: '', isCredit: false, creditLimit: '' })
       setShowForm(false)
       load(search)
     } catch (err) {
@@ -57,6 +61,8 @@ export default function CustomersPage() {
         <form onSubmit={handleCreate} className="mb-6 grid grid-cols-2 gap-3 rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-800 md:grid-cols-4">
           <input required placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100" />
           <input placeholder="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100" />
+          <input placeholder="GSTIN (business customers only)" value={form.gstin} onChange={(e) => setForm({ ...form, gstin: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100" />
+          <input placeholder="State code (e.g. 27)" value={form.stateCode} onChange={(e) => setForm({ ...form, stateCode: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100" />
           <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
             <input type="checkbox" checked={form.isCredit} onChange={(e) => setForm({ ...form, isCredit: e.target.checked })} />
             Credit customer
@@ -89,6 +95,7 @@ export default function CustomersPage() {
             <tr>
               <th className="px-4 py-3">Name</th>
               <th className="px-4 py-3">Phone</th>
+              <th className="px-4 py-3">GSTIN</th>
               <th className="px-4 py-3">Credit Limit</th>
               <th className="px-4 py-3">Credit Balance</th>
               <th className="px-4 py-3">Loyalty Points</th>
@@ -99,6 +106,7 @@ export default function CustomersPage() {
               <tr key={c.id} className="border-b border-slate-100 last:border-0 dark:border-slate-700">
                 <td className="px-4 py-3 font-medium text-slate-900 dark:text-slate-100">{c.name}</td>
                 <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{c.phone ?? '—'}</td>
+                <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{c.gstin ?? '—'}</td>
                 <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{c.is_credit_customer ? `₹${c.credit_limit.toFixed(2)}` : '—'}</td>
                 <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{c.is_credit_customer ? `₹${c.credit_balance.toFixed(2)}` : '—'}</td>
                 <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{c.loyalty_points_balance}</td>
@@ -106,7 +114,7 @@ export default function CustomersPage() {
             ))}
             {customers.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-slate-400">No customers found.</td>
+                <td colSpan={6} className="px-4 py-6 text-center text-slate-400">No customers found.</td>
               </tr>
             )}
           </tbody>

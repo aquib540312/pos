@@ -31,6 +31,26 @@ def _complete_sale(client, seeded_org):
     return sale_resp.json()
 
 
+def _complete_b2b_sale(client, seeded_org, customer_id):
+    # No separate _receive_stock call: the caller already received enough
+    # stock for both a B2B and a walk-in sale (see the b2b/b2cs split
+    # test) -- receiving twice would violate the one-supplier-per-name
+    # unique constraint _receive_stock relies on.
+    sale_resp = client.post(
+        "/api/v1/sales",
+        headers=seeded_org["auth_headers"],
+        json={
+            "branch_id": str(seeded_org["branch"].id),
+            "warehouse_id": str(seeded_org["warehouse"].id),
+            "customer_id": customer_id,
+            "items": [{"product_id": str(seeded_org["product"].id), "quantity": 1}],
+            "payments": [{"method": "cash", "amount": 47}],
+        },
+    )
+    assert sale_resp.status_code == 201, sale_resp.text
+    return sale_resp.json()
+
+
 def _current_return_period():
     import datetime as dt
 
@@ -108,6 +128,46 @@ def test_invalid_return_period_format_is_rejected(client, seeded_org, db_session
 
     resp = client.post("/api/v1/gst-filing/gstr1/notaperiod/generate", headers=seeded_org["auth_headers"])
     assert resp.status_code == 422
+
+
+def test_b2b_sale_is_reported_invoice_wise_and_excluded_from_b2cs(client, seeded_org, db_session):
+    customer_resp = client.post(
+        "/api/v1/party/customers",
+        headers=seeded_org["auth_headers"],
+        json={"name": "Registered Buyer Pvt Ltd", "gstin": "29BBBBB1111B1Z1", "state_code": "27"},
+    )
+    assert customer_resp.status_code == 201, customer_resp.text
+    customer_id = customer_resp.json()["id"]
+
+    _receive_stock(client, seeded_org, quantity=2)  # enough for both sales below
+    _complete_b2b_sale(client, seeded_org, customer_id)  # ends up in b2b
+    sale_resp = client.post(
+        "/api/v1/sales",
+        headers=seeded_org["auth_headers"],
+        json={
+            "branch_id": str(seeded_org["branch"].id),
+            "warehouse_id": str(seeded_org["warehouse"].id),
+            "items": [{"product_id": str(seeded_org["product"].id), "quantity": 1}],
+            "payments": [{"method": "cash", "amount": 47}],
+        },
+    )
+    assert sale_resp.status_code == 201, sale_resp.text  # no customer -- ends up in b2cs
+
+    from app.models.organization import Organization
+
+    org = db_session.get(Organization, seeded_org["organization"].id)
+    org.gstin = "27AAAAA0000A1Z5"
+    db_session.commit()
+
+    period = _current_return_period()
+    generate_resp = client.post(f"/api/v1/gst-filing/gstr1/{period}/generate", headers=seeded_org["auth_headers"])
+    assert generate_resp.status_code == 200, generate_resp.text
+    payload = generate_resp.json()["payload"]
+
+    assert len(payload["b2b"]) == 1
+    assert payload["b2b"][0]["ctin"] == "29BBBBB1111B1Z1"
+    assert len(payload["b2b"][0]["inv"]) == 1
+    assert len(payload["b2cs"]) == 1  # only the walk-in sale, not the B2B one
 
 
 def test_submit_without_generate_is_404(client, seeded_org, db_session):

@@ -38,8 +38,9 @@ class GSTFilingService:
         start, end = parse_return_period(return_period)
         hsn_lines = self.reports.gstr1_summary(organization_id, start, end)
         b2cs_lines = self.reports.gstr1_b2cs_summary(organization_id, start, end)
+        b2b_lines = self.reports.gstr1_b2b_summary(organization_id, start, end)
         gross_turnover = self.reports.gross_turnover(organization_id, start, end)
-        payload = build_gstr1_json(gstin, return_period, gross_turnover, hsn_lines, b2cs_lines)
+        payload = build_gstr1_json(gstin, return_period, gross_turnover, hsn_lines, b2cs_lines, b2b_lines)
         payload_json = json.dumps(payload)
 
         existing = self.filings.get_by_period(organization_id, return_period)

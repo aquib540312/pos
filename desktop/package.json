@@ -1,0 +1,53 @@
+{
+  "name": "pos-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Electron desktop shell for the Indian Retail POS: a native till app wrapping the web frontend, with kiosk mode and cash-drawer control over the same receipt printer used for thermal printing.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:frontend": "cd ../frontend && npm run build",
+    "dist": "npm run build:frontend && electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^33.4.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.posindia.desktop",
+    "productName": "POS Till",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "settings-preload.js",
+      "settings.html"
+    ],
+    "extraResources": [
+      {
+        "from": "../frontend/dist",
+        "to": "frontend-dist"
+      },
+      {
+        "from": "../backend",
+        "to": "backend",
+        "filter": [
+          "sync_agent/**/*",
+          "!sync_agent/**/__pycache__",
+          "!**/*.pyc"
+        ]
+      }
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "mac": {
+      "target": "dmg"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
+  }
+}

@@ -1,0 +1,87 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>POS Till Settings</title>
+<style>
+  body {
+    font-family: system-ui, sans-serif;
+    padding: 24px;
+    background: #0f172a;
+    color: #e2e8f0;
+    margin: 0;
+  }
+  h1 { font-size: 15px; margin: 0 0 16px; }
+  label { display: block; margin-bottom: 6px; font-size: 13px; color: #94a3b8; }
+  input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 10px;
+    margin-bottom: 6px;
+    border-radius: 6px;
+    border: 1px solid #334155;
+    background: #1e293b;
+    color: #e2e8f0;
+    font-size: 13px;
+  }
+  button {
+    padding: 8px 18px;
+    border-radius: 6px;
+    border: none;
+    background: #4f46e5;
+    color: white;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 13px;
+    margin-top: 8px;
+  }
+  button:hover { background: #4338ca; }
+  p.hint { font-size: 12px; color: #64748b; margin: 0 0 16px; }
+</style>
+</head>
+<body>
+  <h1>POS Till &mdash; Backend Setup</h1>
+
+  <label for="origin">Backend server URL (no path suffix)</label>
+  <input id="origin" type="text" placeholder="https://pos-backend.onrender.com" />
+  <p class="hint">
+    Example (hosted): https://pos-backend.onrender.com<br />
+    Example (local server on the shop LAN): http://192.168.1.10:8000
+  </p>
+
+  <label for="terminalKey">Terminal API key (optional, enables offline sales)</label>
+  <input id="terminalKey" type="text" placeholder="Paste the key from 'sync_agent register'" />
+  <p class="hint">
+    One-time setup by a manager: run <code>python -m sync_agent.cli register</code> from
+    <code>backend/</code> against this shop's backend, then paste the printed key here. Leave
+    blank to run online-only (no offline sales queue).
+  </p>
+
+  <label for="dbKey">Local database passphrase (optional)</label>
+  <input id="dbKey" type="password" placeholder="Leave blank for unencrypted local dev storage" />
+  <p class="hint">
+    Encrypts this till's local product/customer cache and offline sales queue at rest. Leave
+    blank only for local development -- always set this for a real shop till.
+  </p>
+
+  <button id="save">Save &amp; Continue</button>
+  <script>
+    const originInput = document.getElementById('origin')
+    const terminalKeyInput = document.getElementById('terminalKey')
+    const dbKeyInput = document.getElementById('dbKey')
+    originInput.value = window.settingsAPI.currentBackendOrigin || ''
+    terminalKeyInput.value = window.settingsAPI.currentTerminalApiKey || ''
+    dbKeyInput.value = window.settingsAPI.currentDbEncryptionKey || ''
+
+    document.getElementById('save').addEventListener('click', () => {
+      const backendOrigin = originInput.value.trim().replace(/\/+$/, '')
+      if (!backendOrigin) return
+      window.settingsAPI.save({
+        backendOrigin,
+        terminalApiKey: terminalKeyInput.value.trim(),
+        dbEncryptionKey: dbKeyInput.value,
+      })
+    })
+  </script>
+</body>
+</html>

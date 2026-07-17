@@ -59,3 +59,13 @@ def print_receipt(
         logger.warning("Failed to queue print job for invoice %s", invoice_id, exc_info=True)
         return {"status": "queue_failed"}
     return {"status": "queued"}
+
+
+@router.post("/drawer/kick")
+def kick_drawer(user: User = Depends(require_permission(Perm.SALES_CREATE))) -> dict[str, str]:
+    """Opens the cash drawer immediately (not queued via Celery) so the
+    cashier gets instant feedback -- e.g. to make change on a cash sale,
+    or a manager opening it manually. Uses the same configured receipt
+    printer as `/receipt/{id}/print`; see PrintService.kick_drawer."""
+    opened = PrintService().kick_drawer()
+    return {"status": "ok" if opened else "failed"}

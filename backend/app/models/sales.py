@@ -63,6 +63,13 @@ class SalesInvoice(Base, UUIDPKMixin, TimestampMixin):
 
     place_of_supply_state_code: Mapped[str] = mapped_column(String(2), nullable=False)
     is_inter_state: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Snapshotted from Customer.gstin at posting time, never re-read from
+    # the customer later (ARCHITECTURE.md #3: posted rows are immutable,
+    # and a customer's GSTIN can change after this invoice was filed).
+    # NULL means this was a B2C sale (walk-in/unregistered consumer);
+    # GSTR-1 Table 4 (B2B) vs Table 7 (B2C small) is decided by this
+    # column, not by re-checking whether customer_id has a GSTIN today.
+    customer_gstin: Mapped[str | None] = mapped_column(String(15), nullable=True)
 
     subtotal: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
     discount_total: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)

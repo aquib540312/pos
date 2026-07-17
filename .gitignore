@@ -16,6 +16,9 @@ dist/
 dist-ssr/
 *.local
 
+# Electron desktop shell build output
+desktop/release/
+
 # Editors
 .vscode/
 .idea/

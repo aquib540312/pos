@@ -50,6 +50,26 @@ class PrintService:
             logger.warning("Failed to print receipt %s: %s", invoice.get("invoice_number"), exc)
             return False
 
+    def kick_drawer(self) -> bool:
+        """Pulses the cash drawer wired into the receipt printer's RJ11/
+        RJ12 port -- the standard setup for retail counters, so opening
+        the drawer needs no hardware beyond the printer already configured
+        for receipts. Best-effort like `print_invoice`: a jammed/offline
+        printer must never block a cashier finishing a cash sale."""
+        if not self.settings.printer_enabled:
+            logger.info("Printing disabled (POS_PRINTER_ENABLED=false); skipping drawer kick")
+            return False
+        try:
+            printer = Network(self.settings.printer_host, port=self.settings.printer_port, timeout=5)
+            try:
+                printer.cashdraw(2)
+            finally:
+                printer.close()
+            return True
+        except (EscposError, OSError) as exc:
+            logger.warning("Failed to kick cash drawer: %s", exc)
+            return False
+
 
 def invoice_to_print_payload(invoice, product_names: dict) -> dict:
     """Flattens a SalesInvoice ORM object (with items/payments loaded)

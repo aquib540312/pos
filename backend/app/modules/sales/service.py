@@ -146,6 +146,7 @@ class SalesService:
             invoice_date=datetime.now(timezone.utc),
             place_of_supply_state_code=buyer_state_code or branch.state_code,
             is_inter_state=inter_state,
+            customer_gstin=customer.gstin if customer else None,
             is_credit_sale=is_credit_sale,
             status="posted",
         )

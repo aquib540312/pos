@@ -10,7 +10,7 @@ from app.models.catalog import HSNCode, Product
 from app.models.inventory import StockItem
 from app.models.rbac import User
 from app.models.sales import SalesInvoice, SalesInvoiceItem
-from app.modules.gst_filing.schema_builder import B2CSLine
+from app.modules.gst_filing.schema_builder import B2BInvoiceLine, B2BInvoiceRateItem, B2CSLine
 from app.modules.reports.schemas import (
     BalanceSheetResponse,
     CashierSalesRow,
@@ -130,10 +130,9 @@ class ReportService:
 
     def gstr1_b2cs_summary(self, organization_id: uuid.UUID, start: date, end: date) -> list[B2CSLine]:
         """GSTR-1 Table 7 (B2C small) grouping: by place of supply, intra-
-        vs inter-state, and rate. This is the section a retail POS's walk-
-        in/unregistered-consumer sales populate; B2B invoice-wise (Table 4)
-        would need per-invoice buyer GSTIN reporting, not yet built (see
-        gst_filing/schema_builder.py docstring)."""
+        vs inter-state, and rate. Only sales with no buyer GSTIN captured
+        (walk-in/unregistered consumers) belong here -- registered-buyer
+        sales are reported invoice-wise instead, see `gstr1_b2b_summary`."""
         start_dt = datetime.combine(start, time.min, tzinfo=timezone.utc)
         end_dt = datetime.combine(end, time.max, tzinfo=timezone.utc)
         stmt = (
@@ -153,6 +152,7 @@ class ReportService:
                 SalesInvoice.status == "posted",
                 SalesInvoice.invoice_date >= start_dt,
                 SalesInvoice.invoice_date <= end_dt,
+                SalesInvoice.customer_gstin.is_(None),
             )
             .group_by(SalesInvoice.place_of_supply_state_code, SalesInvoice.is_inter_state, SalesInvoiceItem.tax_rate_percent)
         )
@@ -169,6 +169,77 @@ class ReportService:
             )
             for pos, is_inter_state, rate, taxable, cgst, sgst, igst, cess in self.db.execute(stmt).all()
         ]
+
+    def gstr1_b2b_summary(self, organization_id: uuid.UUID, start: date, end: date) -> list[B2BInvoiceLine]:
+        """GSTR-1 Table 4 (B2B), invoice-wise: every sale with a buyer
+        GSTIN captured at posting time, one entry per invoice with a
+        rate-item per distinct tax rate on that invoice (an invoice can
+        mix rates, e.g. 5% and 18% products in the same cart)."""
+        start_dt = datetime.combine(start, time.min, tzinfo=timezone.utc)
+        end_dt = datetime.combine(end, time.max, tzinfo=timezone.utc)
+        stmt = (
+            select(
+                SalesInvoice.id,
+                SalesInvoice.customer_gstin,
+                SalesInvoice.invoice_number,
+                SalesInvoice.invoice_date,
+                SalesInvoice.grand_total,
+                SalesInvoice.place_of_supply_state_code,
+                SalesInvoice.is_inter_state,
+                SalesInvoiceItem.tax_rate_percent,
+                func.sum(SalesInvoiceItem.taxable_value),
+                func.sum(SalesInvoiceItem.cgst_amount),
+                func.sum(SalesInvoiceItem.sgst_amount),
+                func.sum(SalesInvoiceItem.igst_amount),
+                func.sum(SalesInvoiceItem.cess_amount),
+            )
+            .join(SalesInvoice, SalesInvoice.id == SalesInvoiceItem.invoice_id)
+            .where(
+                SalesInvoice.organization_id == organization_id,
+                SalesInvoice.status == "posted",
+                SalesInvoice.invoice_date >= start_dt,
+                SalesInvoice.invoice_date <= end_dt,
+                SalesInvoice.customer_gstin.is_not(None),
+            )
+            .group_by(
+                SalesInvoice.id,
+                SalesInvoice.customer_gstin,
+                SalesInvoice.invoice_number,
+                SalesInvoice.invoice_date,
+                SalesInvoice.grand_total,
+                SalesInvoice.place_of_supply_state_code,
+                SalesInvoice.is_inter_state,
+                SalesInvoiceItem.tax_rate_percent,
+            )
+            .order_by(SalesInvoice.invoice_number)
+        )
+
+        invoices: dict[uuid.UUID, B2BInvoiceLine] = {}
+        for (
+            invoice_id, gstin, invoice_number, invoice_date, grand_total, pos, is_inter_state,
+            rate, taxable, cgst, sgst, igst, cess,
+        ) in self.db.execute(stmt).all():
+            rate_item = B2BInvoiceRateItem(
+                tax_rate_percent=float(rate),
+                taxable_value=float(taxable),
+                cgst=float(cgst),
+                sgst=float(sgst),
+                igst=float(igst),
+                cess=float(cess),
+            )
+            if invoice_id not in invoices:
+                invoices[invoice_id] = B2BInvoiceLine(
+                    buyer_gstin=gstin,
+                    invoice_number=invoice_number,
+                    invoice_date=invoice_date.strftime("%d-%m-%Y"),
+                    invoice_value=float(grand_total),
+                    place_of_supply_state_code=pos,
+                    is_inter_state=is_inter_state,
+                    rate_items=[rate_item],
+                )
+            else:
+                invoices[invoice_id].rate_items.append(rate_item)
+        return list(invoices.values())
 
     def gross_turnover(self, organization_id: uuid.UUID, start: date, end: date) -> float:
         start_dt = datetime.combine(start, time.min, tzinfo=timezone.utc)

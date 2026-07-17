@@ -54,5 +54,6 @@ npm run build           # typecheck + production build
 ```
 backend/    FastAPI app (Clean Architecture: api / service / repository per module)
 frontend/   React + TypeScript + Tailwind (Vite)
+desktop/    Electron shell for a physical till (see desktop/README.md)
 docs/       Entity-relationship notes
 ```

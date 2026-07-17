@@ -603,18 +603,50 @@ function Receipt({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Sales rung up while the desktop shell can't reach the backend are
+  // queued locally by sync_agent's local server and come back with this
+  // status instead of "posted" -- there's no real GST invoice yet (no
+  // cached tax rates to compute CGST/SGST/IGST from), just a provisional
+  // slip, until the sale syncs and the server posts the real one.
+  const isOfflinePending = invoice.status === 'offline_pending'
+
+  const [drawerStatus, setDrawerStatus] = useState<'idle' | 'opening' | 'failed'>('idle')
+  async function openDrawer() {
+    setDrawerStatus('opening')
+    try {
+      const { data } = await apiClient.post('/printing/drawer/kick')
+      setDrawerStatus(data.status === 'ok' ? 'idle' : 'failed')
+    } catch {
+      setDrawerStatus('failed')
+    }
+  }
+
   return (
     <div className="mx-auto max-w-md">
       <div className="mb-4 flex justify-end gap-2 print:hidden">
         <button onClick={() => window.print()} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500">
           Print Receipt
         </button>
+        <button
+          onClick={openDrawer}
+          disabled={drawerStatus === 'opening'}
+          title={drawerStatus === 'failed' ? 'Could not reach the receipt printer/drawer' : undefined}
+          className="rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-300 disabled:opacity-60 dark:bg-slate-700 dark:text-slate-100"
+        >
+          {drawerStatus === 'opening' ? 'Opening...' : drawerStatus === 'failed' ? 'Drawer: retry' : 'Open Drawer'}
+        </button>
         <button onClick={onNewSale} className="rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-100">
           New Sale
         </button>
       </div>
+      {isOfflinePending && (
+        <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 print:hidden dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200">
+          Offline sale — saved on this till and will sync automatically once connected. This is a provisional
+          receipt, not the final GST tax invoice; reprint the real one after it syncs.
+        </div>
+      )}
       <div className="rounded-xl border border-slate-200 bg-white p-6 font-mono text-sm dark:border-slate-800 dark:bg-slate-800 print:w-[80mm] print:border-0 print:p-2 print:text-black">
-        <p className="text-center text-base font-bold">TAX INVOICE</p>
+        <p className="text-center text-base font-bold">{isOfflinePending ? 'PROVISIONAL RECEIPT' : 'TAX INVOICE'}</p>
         <p className="text-center text-xs">{invoice.invoice_number}</p>
         <p className="text-center text-xs">{new Date(invoice.invoice_date).toLocaleString('en-IN')}</p>
         <hr className="my-2 border-dashed" />
@@ -625,7 +657,11 @@ function Receipt({
           </div>
         ))}
         <hr className="my-2 border-dashed" />
-        <div className="flex justify-between"><span>Taxable value</span><span>₹{invoice.taxable_total.toFixed(2)}</span></div>
+        {isOfflinePending ? (
+          <div className="flex justify-between"><span>Subtotal (GST pending sync)</span><span>₹{invoice.taxable_total.toFixed(2)}</span></div>
+        ) : (
+          <div className="flex justify-between"><span>Taxable value</span><span>₹{invoice.taxable_total.toFixed(2)}</span></div>
+        )}
         {invoice.cgst_total > 0 && <div className="flex justify-between"><span>CGST</span><span>₹{invoice.cgst_total.toFixed(2)}</span></div>}
         {invoice.sgst_total > 0 && <div className="flex justify-between"><span>SGST</span><span>₹{invoice.sgst_total.toFixed(2)}</span></div>}
         {invoice.igst_total > 0 && <div className="flex justify-between"><span>IGST</span><span>₹{invoice.igst_total.toFixed(2)}</span></div>}

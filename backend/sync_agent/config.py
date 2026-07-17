@@ -46,6 +46,13 @@ class SyncAgentConfig:
     terminal_name: str = ""
     device_fingerprint: str = ""
 
+    # -- Local server (embedding sync_agent as a desktop shell's data layer) -
+    # Fixed rather than OS-assigned so a host process (the Electron shell)
+    # can point the frontend at it without needing to read the chosen port
+    # back from the subprocess.
+    local_server_host: str = "127.0.0.1"
+    local_server_port: int = 8765
+
     @classmethod
     def from_env(cls, prefix: str = "SYNC_AGENT_", env: dict[str, str] | None = None) -> SyncAgentConfig:
         env = env if env is not None else os.environ
@@ -81,6 +88,8 @@ class SyncAgentConfig:
             branch_id=_get(env, prefix, "BRANCH_ID", defaults.branch_id),
             terminal_name=_get(env, prefix, "TERMINAL_NAME", defaults.terminal_name),
             device_fingerprint=_get(env, prefix, "DEVICE_FINGERPRINT", defaults.device_fingerprint),
+            local_server_host=_get(env, prefix, "LOCAL_SERVER_HOST", defaults.local_server_host),
+            local_server_port=_get(env, prefix, "LOCAL_SERVER_PORT", defaults.local_server_port, int),
         )
 
     def with_overrides(self, **kwargs) -> SyncAgentConfig:
