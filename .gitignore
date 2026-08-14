@@ -19,6 +19,10 @@ dist-ssr/
 # Electron desktop shell build output
 desktop/release/
 
+# PyInstaller work & output (the frozen sync_agent binary is reproducible
+# from backend/sync_agent/pyinstaller.spec; dist/ is already ignored above)
+backend/build/pyinstaller/
+
 # Editors
 .vscode/
 .idea/

@@ -52,9 +52,10 @@
   <label for="terminalKey">Terminal API key (optional, enables offline sales)</label>
   <input id="terminalKey" type="text" placeholder="Paste the key from 'sync_agent register'" />
   <p class="hint">
-    One-time setup by a manager: run <code>python -m sync_agent.cli register</code> from
-    <code>backend/</code> against this shop's backend, then paste the printed key here. Leave
-    blank to run online-only (no offline sales queue).
+    One-time setup by a manager: run <code>sync_agent_cli register</code> (from
+    <code>backend/dist/sync_agent_cli/</code>, or <code>python -m sync_agent.cli register</code>
+    from <code>backend/</code>) against this shop's backend, then paste the printed key
+    here. Leave blank to run online-only (no offline sales queue).
   </p>
 
   <label for="dbKey">Local database passphrase (optional)</label>

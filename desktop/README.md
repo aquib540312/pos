@@ -28,12 +28,12 @@ directly. That local server:
 - Gift cards and UPI QR payments need a live connection (no local cache
   for those) — offline checkout only supports cash/card/credit.
 
-If the local server can't start at all (no Python, or `sync_agent`'s
-dependencies aren't installed) or doesn't come up within a few seconds,
-this shell **falls back to the old online-only behavior**: the frontend
-talks to your configured backend directly, same as before this feature
-existed. A till without Python still works, it just can't take sales
-while offline.
+**Packaged installers carry a PyInstaller-frozen copy of this server**
+(`backend/dist/sync_agent_server`, built by `npm run build:sync-agent`)
+as an extraResource, so a till needs **no Python at all** — the shell
+spawns the frozen binary directly. In dev, or if a build has no frozen
+binary, it falls back to spawning `python -m sync_agent.local_server`
+(the old behavior; requires Python + `sync_agent/requirements.txt`).
 
 ### One-time setup per till (for offline sales to actually work)
 
@@ -46,20 +46,22 @@ python -m venv .venv && .venv/bin/pip install -r sync_agent/requirements.txt
 python -m sync_agent.cli register   # prompts for a manager/admin JWT, prints a terminal API key
 ```
 
+On a machine with no Python (a till installed from the packaged build),
+use the frozen CLI that ships with the installer the same way — it's
+installed next to the app as `sync-agent-cli/sync_agent_cli` (`.exe` on
+Windows), or built yourself into `backend/dist/sync_agent_cli/`:
+
+```bash
+# packaged till:
+"<install dir>/resources/sync-agent-cli/sync_agent_cli.exe" register
+# or from a source checkout:
+backend/dist/sync_agent_cli/sync_agent_cli.exe register
+```
+
 Paste that key into this shell's Settings screen (Terminal API key) along
 with a local database passphrase, then launch normally — the till needs
 to be online at least once after this so sync_agent can pull products/
 customers/stock into its local cache before it can serve them offline.
-
-### Prerequisites
-
-`POS_DESKTOP_PYTHON` overrides which interpreter this shell spawns
-(defaults to `python` on `PATH`); it needs `sync_agent/requirements.txt`
-installed. **Not yet done**: freezing that Python process into the
-packaged installer (e.g. via PyInstaller) so end users don't need Python
-themselves — for now, a packaged build still expects a Python environment
-on the till (see `build.extraResources` in `package.json`, which bundles
-`backend/sync_agent/` itself into the installer, but not an interpreter).
 
 ## Cash drawer control
 
@@ -80,6 +82,13 @@ cd ../desktop && npm install
 npm start
 ```
 
+In dev there's no frozen binary, so this shell spawns
+`python -m sync_agent.local_server` instead — it needs a Python with
+`backend/sync_agent/requirements.txt` installed
+(`POS_DESKTOP_PYTHON` overrides which interpreter). If even that isn't
+available, or the local server doesn't come up in a few seconds, the
+frontend talks to your configured backend directly (online-only).
+
 First launch shows the backend settings screen; enter your backend's
 **origin only** (e.g. `http://localhost:8000`, no `/api/v1` suffix — that
 part is added automatically). Settings are stored in Electron's per-user
@@ -92,7 +101,12 @@ Backend Settings; changing them relaunches the app).
 npm run dist
 ```
 
-Builds `frontend/dist` fresh, then packages a Windows/Mac/Linux installer
-into `desktop/release/` via `electron-builder` (target OS is whichever
-you run this on, unless you configure cross-building — see
-electron-builder's docs for that).
+Runs three steps: builds `frontend/dist`, freezes `sync_agent` into
+standalone binaries via PyInstaller (`backend/dist/sync_agent_server`
+and `backend/dist/sync_agent_cli`, from `backend/sync_agent/pyinstaller.spec`
+— needs `python`, `pyinstaller`, and `sync_agent/requirements.txt`
+installed on the build machine), then packages a Windows/Mac/Linux
+installer into `desktop/release/` via `electron-builder` (target OS is
+whichever you run this on, unless you configure cross-building — see
+electron-builder's docs for that). The frozen binaries are platform-bound
+like any PyInstaller output, so run `npm run dist` once per target OS.

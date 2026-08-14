@@ -52,8 +52,8 @@ class SqlCipherConnectionFactory:
     def connect(self, db_path: str, encryption_key: str) -> sqlite3.Connection:
         if not _SQLCIPHER_AVAILABLE:
             raise RuntimeError(
-                "sqlcipher3-binary is not installed, so the local database cannot be "
-                "encrypted at rest. Run `pip install sqlcipher3-binary`, or -- only if "
+                "sqlcipher3 is not installed, so the local database cannot be "
+                "encrypted at rest. Run `pip install sqlcipher3`, or -- only if "
                 "you understand and accept the tradeoff -- construct the agent with "
                 "PlaintextConnectionFactory() and allow_unencrypted_storage=True."
             )

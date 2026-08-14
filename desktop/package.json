@@ -7,7 +7,8 @@
   "scripts": {
     "start": "electron .",
     "build:frontend": "cd ../frontend && npm run build",
-    "dist": "npm run build:frontend && electron-builder"
+    "build:sync-agent": "cd ../backend && python -m PyInstaller --clean --noconfirm --distpath dist --workpath build/pyinstaller sync_agent/pyinstaller.spec",
+    "dist": "npm run build:frontend && npm run build:sync-agent && electron-builder"
   },
   "devDependencies": {
     "electron": "^33.4.0",
@@ -29,6 +30,14 @@
       {
         "from": "../frontend/dist",
         "to": "frontend-dist"
+      },
+      {
+        "from": "../backend/dist/sync_agent_server",
+        "to": "sync-agent"
+      },
+      {
+        "from": "../backend/dist/sync_agent_cli",
+        "to": "sync-agent-cli"
       },
       {
         "from": "../backend",

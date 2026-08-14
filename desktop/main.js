@@ -34,6 +34,18 @@ function backendDir() {
   return app.isPackaged ? path.join(process.resourcesPath, 'backend') : path.join(__dirname, '..', 'backend')
 }
 
+// The PyInstaller-frozen sync_agent binary, if this build shipped one
+// (see "build.extraResources" in package.json: backend/dist/sync_agent_server
+// is copied to <resources>/sync-agent). Returns null in dev or when the
+// packaged build has no frozen binary, in which case we fall back to
+// spawning `python -m sync_agent.local_server` instead.
+function frozenSyncAgentBinary() {
+  if (!app.isPackaged) return null
+  const exeName = process.platform === 'win32' ? 'sync_agent_server.exe' : 'sync_agent_server'
+  const candidate = path.join(process.resourcesPath, 'sync-agent', exeName)
+  return fs.existsSync(candidate) ? candidate : null
+}
+
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
@@ -82,16 +94,19 @@ function startStaticServer(root) {
 // as a child process -- it proxies to the shop's real backend
 // (config.backendOrigin) when reachable and falls back to its own synced
 // SQLite cache + offline sales queue when it isn't, all on one local port
-// the frontend talks to unconditionally. Requires a Python environment
-// with backend/sync_agent/requirements.txt installed (see desktop/README.md);
-// POS_DESKTOP_PYTHON overrides which interpreter to use.
+// the frontend talks to unconditionally.
+//
+// Packaged builds prefer the PyInstaller-frozen binary (no Python on the
+// till); dev and unpackaged builds spawn `python -m sync_agent.local_server`
+// and require a Python environment with backend/sync_agent/requirements.txt
+// installed (see desktop/README.md). POS_DESKTOP_PYTHON overrides which
+// interpreter to use in that fallback.
 let syncAgentProcess = null
 
 function startSyncAgent(config) {
-  const pythonBin = process.env.POS_DESKTOP_PYTHON || 'python'
+  const frozenBinary = frozenSyncAgentBinary()
   const env = {
     ...process.env,
-    PYTHONPATH: backendDir(),
     SYNC_AGENT_SERVER_BASE_URL: config.backendOrigin || '',
     SYNC_AGENT_TERMINAL_API_KEY: config.terminalApiKey || '',
     SYNC_AGENT_DB_PATH: path.join(app.getPath('userData'), 'sync_agent.db'),
@@ -99,7 +114,12 @@ function startSyncAgent(config) {
     SYNC_AGENT_ALLOW_UNENCRYPTED_STORAGE: config.dbEncryptionKey ? 'false' : 'true',
     SYNC_AGENT_LOCAL_SERVER_PORT: String(LOCAL_SERVER_PORT),
   }
-  const proc = spawn(pythonBin, ['-m', 'sync_agent.local_server'], { cwd: backendDir(), env })
+  const proc = frozenBinary
+    ? spawn(frozenBinary, [], { env })
+    : spawn(process.env.POS_DESKTOP_PYTHON || 'python', ['-m', 'sync_agent.local_server'], {
+        cwd: backendDir(),
+        env: { ...env, PYTHONPATH: backendDir() },
+      })
   proc.stdout.on('data', (chunk) => console.log(`[sync_agent] ${chunk}`.trim()))
   proc.stderr.on('data', (chunk) => console.error(`[sync_agent] ${chunk}`.trim()))
   proc.on('exit', (code) => console.log(`[sync_agent] exited with code ${code}`))

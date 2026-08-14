@@ -69,6 +69,34 @@ jobs:
       - name: Typecheck + build
         run: npm run build
 
+  sync-agent-freeze:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: backend/sync_agent/requirements.txt
+
+      - name: Install sync_agent deps + PyInstaller
+        run: |
+          pip install -r sync_agent/requirements.txt
+          pip install pyinstaller
+
+      - name: Freeze local server + CLI via PyInstaller
+        run: |
+          python -m PyInstaller --clean --noconfirm --distpath dist --workpath build/pyinstaller sync_agent/pyinstaller.spec
+
+      - name: Verify both frozen binaries were produced
+        run: |
+          test -x dist/sync_agent_server/sync_agent_server
+          test -x dist/sync_agent_cli/sync_agent_cli
+
   docker-build:
     runs-on: ubuntu-latest
     steps:

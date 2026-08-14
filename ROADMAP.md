@@ -130,13 +130,17 @@ Status: in progress / see commit history for exact state.
   conflict for a manager to retry or cancel, never forced through.
   153 backend tests passing (40 of them sync-specific, including a real
   loopback-socket integration test against the actual API).
-- **Electron desktop shell**: thin wrapper over the web frontend + cash
-  drawer kick (serial/USB), now that `sync_agent` provides the offline
-  cache/queue engine itself. The ESC/POS printing piece is also already
-  built and reusable from Electron (it's just talking to the same printer
-  over the network) — what's left here is specifically embedding
-  `sync_agent` as the desktop shell's local data layer and the
-  drawer-kick integration.
+- [x] **Electron desktop shell**: thin wrapper over the web frontend + cash
+  drawer kick (serial/USB), with `sync_agent` embedded as its local data
+  layer (proxies to the real backend online, falls back to the synced
+  SQLite cache + offline sales queue offline; see `ARCHITECTURE.md` §5 and
+  `desktop/README.md`). The ESC/POS printing piece talks to the same
+  printer over the network and is reused from Electron. The Python
+  process is now **frozen into the installer via PyInstaller**
+  (`backend/sync_agent/pyinstaller.spec`, built by `npm run build:sync-agent`)
+  so a till needs no Python installed — the shell spawns the frozen
+  `sync_agent_server` binary when packaged and a frozen `sync_agent_cli`
+  handles the one-time terminal registration.
 - **React Native mobile**: for supervisor dashboards / handheld barcode
   scanning — confirm this is actually wanted before building it; POS
   billing on a phone is unusual for a retail counter.

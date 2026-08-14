@@ -32,7 +32,7 @@ def test_requires_encryption_key_unless_explicitly_opted_out(tmp_path):
         LocalDatabase(db_path=db_path, encryption_key="")
 
 
-@pytest.mark.skipif(not _SQLCIPHER_AVAILABLE, reason="sqlcipher3-binary not installed")
+@pytest.mark.skipif(not _SQLCIPHER_AVAILABLE, reason="sqlcipher3 not installed")
 def test_sqlcipher_roundtrip_with_correct_key(tmp_path):
     db_path = str(tmp_path / "encrypted.db")
     db = LocalDatabase(db_path=db_path, encryption_key="correct-horse-battery-staple")
@@ -50,7 +50,7 @@ def test_sqlcipher_roundtrip_with_correct_key(tmp_path):
     reopened.close()
 
 
-@pytest.mark.skipif(not _SQLCIPHER_AVAILABLE, reason="sqlcipher3-binary not installed")
+@pytest.mark.skipif(not _SQLCIPHER_AVAILABLE, reason="sqlcipher3 not installed")
 def test_sqlcipher_rejects_wrong_key(tmp_path):
     db_path = str(tmp_path / "encrypted2.db")
     db = LocalDatabase(db_path=db_path, encryption_key="the-real-key")
@@ -66,7 +66,7 @@ def test_sqlcipher_rejects_wrong_key(tmp_path):
         LocalDatabase(db_path=db_path, encryption_key="totally-wrong-key")
 
 
-@pytest.mark.skipif(not _SQLCIPHER_AVAILABLE, reason="sqlcipher3-binary not installed")
+@pytest.mark.skipif(not _SQLCIPHER_AVAILABLE, reason="sqlcipher3 not installed")
 def test_a_key_with_a_single_quote_is_handled_safely(tmp_path):
     """The PRAGMA key statement can't use bound parameters, so a
     passphrase containing a single quote is a real risk of either a SQL

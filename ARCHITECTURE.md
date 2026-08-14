@@ -132,7 +132,7 @@ either can be tested and reasoned about on its own:
   protocol could implement the same interface without touching this
   package. `HttpSyncTransport` is the one shipped implementation.
 - Local storage is SQLite encrypted at rest with SQLCipher (AES-256) via
-  `sqlcipher3-binary` — a real passphrase-derived key, not an
+  `sqlcipher3` — a real passphrase-derived key, not an
   application-level bolt-on — behind a `ConnectionFactory` seam so the
   encryption engine itself is swappable.
 - A cashier's sale is enqueued locally and unconditionally (never rejected
