@@ -8,6 +8,22 @@ from app.db.base import Base
 from app.models.mixins import GUID, TimestampMixin, UUIDPKMixin, org_fk
 
 
+class LoyaltyConfig(Base, UUIDPKMixin, TimestampMixin):
+    """Per-organization loyalty points program settings. Defaults mirror the
+    legacy hard-coded constants (1 point per Rs.100 spend, 1 point = Re.1)
+    for orgs that predate per-org configuration."""
+
+    __tablename__ = "loyalty_configs"
+    __table_args__ = (UniqueConstraint("organization_id", name="uq_loyalty_config_org"),)
+
+    organization_id: Mapped[uuid.UUID] = org_fk()
+    points_per_rupee_spent: Mapped[float] = mapped_column(Numeric(8, 4, asdecimal=False), nullable=False, default=0.01)
+    point_value_in_rupees: Mapped[float] = mapped_column(Numeric(8, 4, asdecimal=False), nullable=False, default=1.0)
+    # Minimum spend to earn points (excludes any redeemed-points portion).
+    min_taxable_amount: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
+    is_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+
 class LoyaltyTransaction(Base, UUIDPKMixin):
     """Append-only ledger of loyalty point accrual/redemption, mirroring the
     stock-ledger pattern -- Customer.loyalty_points_balance is the cached

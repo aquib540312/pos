@@ -130,6 +130,10 @@ class ProductBatch(Base, UUIDPKMixin, TimestampMixin):
     manufactured_date: Mapped[date | None] = mapped_column(Date)
     expiry_date: Mapped[date | None] = mapped_column(Date, index=True)
     purchase_price: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
+    # A closed batch is removed from FEFO issuing (its remaining stock can
+    # still be adjusted/transferred) -- used to quarantine an expired or
+    # damaged lot without destroying the stock ledger trail.
+    is_closed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     product: Mapped["Product"] = relationship()
 

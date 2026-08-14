@@ -118,6 +118,30 @@ class ReturnResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ReturnItemResponse(BaseModel):
+    id: uuid.UUID
+    sales_return_id: uuid.UUID
+    original_invoice_item_id: uuid.UUID
+    quantity: float
+    taxable_value: float
+    cgst_amount: float
+    sgst_amount: float
+    igst_amount: float
+    line_total: float
+
+    model_config = {"from_attributes": True}
+
+
+class ReturnDetailResponse(ReturnResponse):
+    reason: str | None
+    return_date: datetime
+    items: list[ReturnItemResponse]
+
+
+class CancelSaleRequest(BaseModel):
+    reason: str | None = Field(default=None, max_length=255)
+
+
 class QuotationLineRequest(BaseModel):
     product_id: uuid.UUID
     quantity: float = Field(gt=0)

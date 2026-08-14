@@ -23,6 +23,8 @@ DEFAULT_ACCOUNTS: list[tuple[str, str, str]] = [
     ("4900", "Rounding Off", "income"),
     ("5000", "Purchases", "expense"),
     ("5900", "Sales Returns", "expense"),
+    ("5100", "Operating Expenses", "expense"),
+    ("5200", "Electricity & Utilities", "expense"),
 ]
 
 

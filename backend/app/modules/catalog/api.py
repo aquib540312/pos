@@ -21,13 +21,17 @@ from app.modules.catalog.schemas import (
     BulkImportRowResult,
     CategoryCreateRequest,
     CategoryResponse,
+    CategoryUpdateRequest,
     ComboComponentResponse,
     HSNCreateRequest,
     HSNResponse,
+    HSNUpdateRequest,
     ProductCreateRequest,
     ProductResponse,
+    ProductUpdateRequest,
     UOMCreateRequest,
     UOMResponse,
+    UOMUpdateRequest,
 )
 from app.modules.catalog.service import CatalogService
 
@@ -76,6 +80,23 @@ def create_category(
     return category
 
 
+@router.patch("/categories/{category_id}", response_model=CategoryResponse)
+def update_category(
+    category_id: uuid.UUID,
+    payload: CategoryUpdateRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission(Perm.CATALOG_MANAGE)),
+):
+    service = CatalogService(db)
+    try:
+        category = service.update_category(user.organization_id, category_id, payload.model_dump())
+        db.commit()
+    except NotFoundError as exc:
+        db.rollback()
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
+    return category
+
+
 @router.get("/uom", response_model=list[UOMResponse])
 def list_uom(db: Session = Depends(get_db), user: User = Depends(require_permission(Perm.CATALOG_VIEW))):
     return CatalogService(db).uoms.list(user.organization_id)
@@ -89,6 +110,24 @@ def create_uom(
 ):
     uom = CatalogService(db).create_uom(user.organization_id, payload.code, payload.name)
     db.commit()
+    return uom
+
+
+@router.patch("/uom/{uom_id}", response_model=UOMResponse)
+def update_uom(
+    uom_id: uuid.UUID,
+    payload: UOMUpdateRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission(Perm.CATALOG_MANAGE)),
+):
+    service = CatalogService(db)
+    try:
+        uom = service.update_uom(user.organization_id, uom_id, payload.model_dump())
+        db.commit()
+    except (NotFoundError, ConflictError) as exc:
+        db.rollback()
+        code = status.HTTP_404_NOT_FOUND if isinstance(exc, NotFoundError) else status.HTTP_409_CONFLICT
+        raise HTTPException(code, str(exc)) from exc
     return uom
 
 
@@ -131,6 +170,30 @@ def create_hsn(
         description=hsn.description,
         is_service=hsn.is_service,
         current_rate_percent=payload.rate_percent,
+    )
+
+
+@router.patch("/hsn/{hsn_id}", response_model=HSNResponse)
+def update_hsn(
+    hsn_id: uuid.UUID,
+    payload: HSNUpdateRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission(Perm.CATALOG_MANAGE)),
+):
+    service = CatalogService(db)
+    try:
+        hsn = service.update_hsn(user.organization_id, hsn_id, payload.model_dump())
+        db.commit()
+    except (NotFoundError, ConflictError) as exc:
+        db.rollback()
+        code = status.HTTP_404_NOT_FOUND if isinstance(exc, NotFoundError) else status.HTTP_409_CONFLICT
+        raise HTTPException(code, str(exc)) from exc
+    return HSNResponse(
+        id=hsn.id,
+        code=hsn.code,
+        description=hsn.description,
+        is_service=hsn.is_service,
+        current_rate_percent=service.hsn_current_rate(hsn.id),
     )
 
 
@@ -183,6 +246,45 @@ def create_product(
         db.rollback()
         code = status.HTTP_404_NOT_FOUND if isinstance(exc, NotFoundError) else status.HTTP_422_UNPROCESSABLE_ENTITY
         raise HTTPException(code, str(exc)) from exc
+    return _to_product_response(service, product)
+
+
+@router.patch("/products/{product_id}", response_model=ProductResponse)
+def update_product(
+    product_id: uuid.UUID,
+    payload: ProductUpdateRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission(Perm.CATALOG_MANAGE)),
+):
+    service = CatalogService(db)
+    try:
+        product = service.update_product(user.organization_id, product_id, payload.model_dump())
+        db.commit()
+    except NotFoundError as exc:
+        db.rollback()
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
+    except ConflictError as exc:
+        db.rollback()
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    return _to_product_response(service, product)
+
+
+@router.patch("/products/{product_id}/deactivate", response_model=ProductResponse)
+def deactivate_product(
+    product_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission(Perm.CATALOG_MANAGE)),
+):
+    """Soft-delete a product: hidden from search and the billing screen,
+    but historical invoices keep resolving. Combo components that reference
+    it are unlinked so a deactivated product never leaks back into a cart."""
+    service = CatalogService(db)
+    try:
+        product = service.deactivate_product(user.organization_id, product_id)
+        db.commit()
+    except NotFoundError as exc:
+        db.rollback()
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
     return _to_product_response(service, product)
 
 

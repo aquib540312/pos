@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
+from app.modules.accounting.api import router as accounting_router
 from app.modules.audit.api import router as audit_router
 from app.modules.auth.api import router as auth_router
 from app.modules.billing.api import router as billing_router
@@ -62,6 +63,7 @@ for router in (
     audit_router,
     sync_router,
     subscriptions_router,
+    accounting_router,
 ):
     app.include_router(router)
 

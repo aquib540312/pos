@@ -96,6 +96,30 @@ class CouponService:
         coupon.times_redeemed += 1
         self.db.flush()
 
+    def revoke(self, organization_id: uuid.UUID, code: str) -> None:
+        """Decrement a coupon's redemption count after a sale that used it
+        is cancelled -- a cancelled invoice never actually consumed a
+        limited-use coupon, so its redemption slot is returned."""
+        coupon = self.coupons.get_by_code(organization_id, code)
+        if coupon is not None and coupon.times_redeemed > 0:
+            coupon.times_redeemed -= 1
+            self.db.flush()
+
+    def list_coupons(self, organization_id: uuid.UUID) -> list[Coupon]:
+        return self.coupons.list(organization_id)
+
+    def get_coupon_or_404(self, organization_id: uuid.UUID, coupon_id: uuid.UUID) -> Coupon:
+        coupon = self.coupons.get(coupon_id)
+        if coupon is None or coupon.organization_id != organization_id:
+            raise NotFoundError(f"Coupon {coupon_id} not found")
+        return coupon
+
+    def deactivate_coupon(self, organization_id: uuid.UUID, coupon_id: uuid.UUID) -> Coupon:
+        coupon = self.get_coupon_or_404(organization_id, coupon_id)
+        coupon.is_active = False
+        self.db.flush()
+        return coupon
+
 
 class GiftCardService:
     def __init__(self, db: Session):
@@ -127,3 +151,18 @@ class GiftCardService:
         )
         self.db.flush()
         return amount
+
+    def list_gift_cards(self, organization_id: uuid.UUID) -> list[GiftCard]:
+        return self.gift_cards.list(organization_id)
+
+    def get_gift_card_or_404(self, organization_id: uuid.UUID, card_id: uuid.UUID) -> GiftCard:
+        card = self.gift_cards.get(card_id)
+        if card is None or card.organization_id != organization_id:
+            raise NotFoundError(f"Gift card {card_id} not found")
+        return card
+
+    def deactivate_gift_card(self, organization_id: uuid.UUID, card_id: uuid.UUID) -> GiftCard:
+        card = self.get_gift_card_or_404(organization_id, card_id)
+        card.is_active = False
+        self.db.flush()
+        return card

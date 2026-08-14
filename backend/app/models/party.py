@@ -1,10 +1,11 @@
 import uuid
+from datetime import datetime
 
-from sqlalchemy import Boolean, Numeric, String, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
-from app.models.mixins import TimestampMixin, UUIDPKMixin, org_fk
+from app.models.mixins import GUID, TimestampMixin, UUIDPKMixin, org_fk
 
 
 class Customer(Base, UUIDPKMixin, TimestampMixin):
@@ -40,3 +41,20 @@ class Supplier(Base, UUIDPKMixin, TimestampMixin):
     address: Mapped[str | None] = mapped_column(String(500))
     payable_balance: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+
+class SupplierPayment(Base, UUIDPKMixin, TimestampMixin):
+    """A standalone payment against a supplier's running payable balance
+    (reduces Accounts Payable) -- the purchase-side mirror of a customer
+    credit collection. Debits AP, credits cash/bank in the ledger, and the
+    supplier's payable_balance is reduced by the applied amount."""
+
+    __tablename__ = "supplier_payments"
+
+    organization_id: Mapped[uuid.UUID] = org_fk()
+    supplier_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("suppliers.id"), nullable=False, index=True)
+    amount: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False)
+    method: Mapped[str] = mapped_column(String(20), nullable=False, default="bank")  # cash|bank|card|upi
+    reference: Mapped[str | None] = mapped_column(String(120))
+    paid_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    note: Mapped[str | None] = mapped_column(String(255))

@@ -164,8 +164,9 @@ def test_goods_receipt_with_free_pieces_only_bills_paid_quantity(client, seeded_
     )
 
     payable_after = _supplier_payable(client, seeded_org, supplier_id)
-    # Only the 100 paid units at 30 each = 3000 -- the 10 free units cost nothing.
-    assert payable_after - payable_before == 3000
+    # Only the 100 paid units at 30 each = 3000 are owed -- the 10 free units
+    # cost nothing -- plus 18% GST (540) the supplier bills on the paid amount.
+    assert payable_after - payable_before == 3540
 
 
 def test_goods_receipt_rejects_free_quantity_exceeding_total(client, seeded_org):

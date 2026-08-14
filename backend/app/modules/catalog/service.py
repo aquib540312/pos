@@ -1,5 +1,5 @@
 import uuid
-from datetime import date
+from datetime import date, timedelta
 
 from sqlalchemy.orm import Session
 
@@ -176,6 +176,123 @@ class CatalogService:
         if product is None:
             raise NotFoundError(f"Product {product_id} not found")
         return product
+
+    def update_product(self, organization_id: uuid.UUID, product_id: uuid.UUID, fields: dict) -> Product:
+        """Partial edit of a product. `None` values in `fields` mean "leave
+        unchanged" -- nullable values are cleared via the explicit
+        remove_barcode/remove_description flags instead (see schemas)."""
+        product = self.get_product_or_404(product_id)
+        if product.organization_id != organization_id:
+            raise NotFoundError(f"Product {product_id} not found")
+
+        sku = fields.get("sku")
+        if sku is not None and sku != product.sku:
+            existing = self.products.get_by_sku(organization_id, sku)
+            if existing is not None and existing.id != product.id:
+                raise ConflictError(f"SKU '{sku}' already exists")
+            product.sku = sku
+
+        barcode = fields.get("barcode")
+        if barcode is not None and barcode != product.barcode:
+            existing = self.products.get_by_barcode(organization_id, barcode)
+            if existing is not None and existing.id != product.id:
+                raise ConflictError(f"Barcode '{barcode}' already exists")
+            product.barcode = barcode
+
+        for key in ("name", "description", "category_id", "hsn_code_id", "uom_id",
+                    "mrp", "sale_price", "purchase_price", "reorder_level", "is_active"):
+            if fields.get(key) is not None:
+                setattr(product, key, fields[key])
+        if fields.get("remove_barcode"):
+            product.barcode = None
+        if fields.get("remove_description"):
+            product.description = None
+        self.db.flush()
+        return product
+
+    def deactivate_product(self, organization_id: uuid.UUID, product_id: uuid.UUID) -> Product:
+        """Soft-delete: flips is_active off so the product disappears from
+        searchable/billable lists but historical invoices keep resolving.
+        Public-combination removal is handled by the caller wiping the
+        forward components (see create_* for the combo invariant)."""
+        product = self.get_product_or_404(product_id)
+        if product.organization_id != organization_id:
+            raise NotFoundError(f"Product {product_id} not found")
+        product.is_active = False
+        self.db.flush()
+        return product
+
+    def update_category(self, organization_id: uuid.UUID, category_id: uuid.UUID, fields: dict) -> Category:
+        category = self.db.get(Category, category_id)
+        if category is None or category.organization_id != organization_id:
+            raise NotFoundError(f"Category {category_id} not found")
+        if fields.get("name") is not None:
+            category.name = fields["name"]
+        if fields.get("remove_parent"):
+            category.parent_id = None
+        elif fields.get("parent_id") is not None:
+            category.parent_id = fields["parent_id"]
+        self.db.flush()
+        return category
+
+    def update_uom(self, organization_id: uuid.UUID, uom_id: uuid.UUID, fields: dict) -> UnitOfMeasure:
+        uom = self.db.get(UnitOfMeasure, uom_id)
+        if uom is None or uom.organization_id != organization_id:
+            raise NotFoundError(f"Unit of measure {uom_id} not found")
+        code = fields.get("code")
+        if code is not None and code != uom.code:
+            existing = self.uoms.get_by_code(organization_id, code)
+            if existing is not None and existing.id != uom.id:
+                raise ConflictError(f"UOM code '{code}' already exists")
+            uom.code = code
+        if fields.get("name") is not None:
+            uom.name = fields["name"]
+        self.db.flush()
+        return uom
+
+    def update_hsn(
+        self, organization_id: uuid.UUID, hsn_id: uuid.UUID, fields: dict
+    ) -> HSNCode:
+        """Edit an HSN/SAC code. A change to rate/cess creates a *new*
+        versioned TaxRate row (effective today) rather than mutating the old
+        one, so historical invoices keep the rate they were billed at."""
+        hsn = self.hsn.get(hsn_id)
+        if hsn is None or hsn.organization_id != organization_id:
+            raise NotFoundError(f"HSN/SAC code {hsn_id} not found")
+
+        code = fields.get("code")
+        if code is not None and code != hsn.code:
+            existing = self.hsn.get_by_code(organization_id, code)
+            if existing is not None and existing.id != hsn.id:
+                raise ConflictError(f"HSN code '{code}' already exists")
+            hsn.code = code
+        if fields.get("description") is not None:
+            hsn.description = fields["description"]
+        if fields.get("remove_description"):
+            hsn.description = None
+        if fields.get("is_service") is not None:
+            hsn.is_service = fields["is_service"]
+
+        rate = fields.get("rate_percent")
+        if rate is not None:
+            effective_from = fields.get("effective_from") or date.today()
+            # Close out the currently-effective rate so historical invoices
+            # keep theirs, but lookups from `effective_from` resolve to the
+            # new one.
+            current = self.hsn.get_effective_tax_rate(hsn.id, effective_from)
+            if current is not None and current.effective_to is None:
+                current.effective_to = effective_from - timedelta(days=1)
+            self.hsn.add_tax_rate(
+                TaxRate(
+                    organization_id=organization_id,
+                    hsn_code_id=hsn.id,
+                    rate_percent=rate,
+                    cess_percent=fields.get("cess_percent") or 0,
+                    effective_from=effective_from,
+                )
+            )
+        self.db.flush()
+        return hsn
 
     def search_products(self, organization_id: uuid.UUID, search: str | None) -> list[Product]:
         return self.products.list(organization_id, search=search)

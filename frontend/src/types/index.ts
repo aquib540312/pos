@@ -325,3 +325,170 @@ export interface Subscription {
   branches_used: number
   users_used: number
 }
+
+export interface SalesReturnItem {
+  id: string
+  original_invoice_item_id: string
+  quantity: number
+  taxable_value: number
+  cgst_amount: number
+  sgst_amount: number
+  igst_amount: number
+  line_total: number
+}
+
+export interface SalesReturn {
+  id: string
+  return_number: string
+  original_invoice_id: string
+  refund_total: number
+  refund_mode: string
+  reason: string | null
+  return_date: string
+  items: SalesReturnItem[]
+}
+
+export interface StockItem {
+  warehouse_id: string
+  product_id: string
+  batch_id: string | null
+  quantity_on_hand: number
+}
+
+export interface StockLedgerRow {
+  id: string
+  created_at: string
+  warehouse_id: string
+  product_id: string
+  batch_id: string | null
+  movement_type: string
+  quantity_delta: number
+  reference_type: string
+  reference_id: string
+  notes: string | null
+}
+
+export interface Coupon {
+  id: string
+  code: string
+  discount_type: 'percent' | 'flat'
+  discount_value: number
+  min_order_value: number
+  times_redeemed: number
+  max_redemptions: number | null
+  is_active: boolean
+}
+
+export interface GiftCard {
+  id: string
+  card_number: string
+  initial_value: number
+  balance: number
+  is_active: boolean
+}
+
+export interface DashboardStats {
+  today_invoice_count: number
+  today_taxable_value: number
+  today_gst_total: number
+  today_grand_total: number
+  today_cash_sales: number
+  low_stock_count: number
+  expiring_soon_count: number
+  open_shifts: number
+  open_credit_outstanding: number
+  open_conflicts: number
+}
+
+export interface LowStockRow {
+  product_id: string
+  product_name: string
+  sku: string
+  barcode: string | null
+  uom_code: string | null
+  quantity_on_hand: number
+  reorder_level: number
+  below_reorder: boolean
+}
+
+export interface ExpiringStockRow {
+  product_id: string
+  product_name: string
+  sku: string
+  warehouse_id: string
+  warehouse_name: string | null
+  batch_id: string
+  batch_number: string
+  quantity_on_hand: number
+  expiry_date: string
+  days_to_expiry: number | null
+}
+
+export interface StockValuationRow {
+  product_id: string
+  product_name: string
+  sku: string
+  quantity_on_hand: number
+  average_cost: number
+  valuation: number
+}
+
+export interface AppNotification {
+  id: string
+  category: string
+  title: string
+  body: string | null
+  reference_type: string | null
+  reference_id: string | null
+  is_read: boolean
+  created_at: string
+}
+
+export interface PendingGRNItem {
+  po_id: string
+  po_number: string
+  supplier_id: string
+  order_date: string
+  status: string
+  product_id: string
+  product_name: string
+  sku: string
+  quantity_ordered: number
+  quantity_received: number
+  outstanding_quantity: number
+}
+
+export interface PurchaseReturnItem {
+  id: string
+  product_id: string
+  batch_id: string | null
+  quantity: number
+  unit_cost: number
+  taxable_value: number
+  cgst_amount: number
+  sgst_amount: number
+  igst_amount: number
+  line_total: number
+}
+
+export interface PurchaseReturn {
+  id: string
+  return_number: string
+  supplier_id: string
+  return_date: string
+  reason: string | null
+  return_total: number
+  is_debit_note: boolean
+  items: PurchaseReturnItem[]
+}
+
+export interface SupplierPayment {
+  id: string
+  supplier_id: string
+  amount: number
+  method: string
+  reference: string | null
+  paid_at: string
+  note: string | null
+  outstanding_payable: number
+}

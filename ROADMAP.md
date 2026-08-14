@@ -29,9 +29,11 @@ Status: in progress / see commit history for exact state.
       vs Accounts Payable) and sales returns (reversing revenue/GST vs
       cash/bank/receivable) in addition to sales; P&L and Balance Sheet
       report endpoints (`/reports/profit-and-loss`, `/reports/balance-sheet`)
-      built on top of the ledger. Known simplification: purchase-side input
-      GST credit isn't posted yet because PO/GRN line items don't carry
-      HSN/tax-rate data — only ex-tax cost is booked to Inventory.
+      built on top of the ledger. Purchase-side input GST credit is posted
+      too: GRN lines carry HSN/tax rate, so a goods receipt debits
+      Inventory + Input CGST/SGST/IGST Receivable and credits Accounts
+      Payable for the tax-inclusive total (claimable in GSTR-3B), and a
+      purchase return reverses it.
 - [x] Barcode/QR product labels: `/catalog/products/{id}/barcode.png`
       (Code128) and `/qr.png` (SKU+name+MRP payload), plus a printable
       `/label-sheet.png` grid (N copies, configurable columns) sized for
@@ -58,6 +60,21 @@ Status: in progress / see commit history for exact state.
       which coupon was used and its discount amount (new migration). POS
       billing screen has real Coupon and Gift Card fields, verified
       end-to-end in a browser.
+- [x] **Purchase-side depth**: purchase orders now have a status lifecycle
+      (draft -> submitted -> closed/cancelled, with a validated transition
+      endpoint), a server-side *pending GRN* view (every under-delivered PO
+      line with its outstanding quantity), and **purchase returns** — stock
+      is issued from a warehouse, the supplier's payable balance drops, and
+      the reverse-of-GRN ledger entry is posted (credit Inventory + Input
+      GST, debit Accounts Payable). **Supplier payments** settle part/all
+      of a running payable (debit AP, credit cash/bank) and are recorded as
+      line items under the supplier. Purchasing UI now exposes all of it:
+      pending-GRN panel, PO submit/close/cancel actions, and a Returns tab.
+- [x] **In-app notifications**: `app_notifications` inbox (new table) with
+      list / unread-count / mark-read / mark-all-read endpoints. The
+      dashboard auto-creates deduplicated low-stock and expiring-stock
+      alerts (per product, idempotent across reloads); a bell with an
+      unread badge in the app header surfaces them to staff.
 - GSTR-1/3B **filing** integration — requires a GSP (GST Suvidha Provider)
   API account and credentials from you; today we generate the correct
   line-level data, not the government-format JSON/upload.

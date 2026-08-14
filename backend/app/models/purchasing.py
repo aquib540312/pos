@@ -1,7 +1,7 @@
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, ForeignKey, Numeric, String
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -73,5 +73,62 @@ class GoodsReceiptItem(Base, UUIDPKMixin):
     # linked PO's fulfillment; see PurchasingService.receive_goods.
     free_quantity: Mapped[float] = mapped_column(Numeric(14, 3, asdecimal=False), nullable=False, default=0)
     unit_cost: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False)
+    # Purchase-side GST captured at receipt time so Input CGST/SGST/IGST
+    # credit can be claimed in accounting (previously deferred -- see
+    # accounting/service.py). Snapshot per line, mirroring how sale lines
+    # store their own cgst/sgst/igst; tax_rate_percent is the total slab.
+    hsn_code_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("hsn_codes.id"), nullable=True)
+    tax_rate_percent: Mapped[float] = mapped_column(Numeric(5, 2, asdecimal=False), nullable=False, default=0)
+    cgst_amount: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
+    sgst_amount: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
+    igst_amount: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
 
     goods_receipt: Mapped["GoodsReceipt"] = relationship(back_populates="items")
+
+
+class PurchaseReturn(Base, UUIDPKMixin, TimestampMixin):
+    """Return of damaged/excess goods to a supplier, linked to the original
+    GoodsReceipt (or recorded standalone). Issuing a purchase return writes
+    a `purchase_return` stock ledger entry, reduces the supplier's payable
+    balance, and posts a reverse-of-GRN journal entry (credit Inventory +
+    Input GST, debit Accounts Payable)."""
+
+    __tablename__ = "purchase_returns"
+
+    organization_id: Mapped[uuid.UUID] = org_fk()
+    branch_id: Mapped[uuid.UUID] = branch_fk()
+    warehouse_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("warehouses.id"), nullable=False)
+    supplier_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("suppliers.id"), nullable=False, index=True)
+    goods_receipt_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("goods_receipts.id"), nullable=True)
+    return_number: Mapped[str] = mapped_column(String(40), nullable=False, unique=True)
+    return_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    reason: Mapped[str | None] = mapped_column(String(255))
+    return_total: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
+    # The supplier owes us the returned value -- turns the payable balance
+    # negative (a credit in our favor). Kept as a simple flag + posted amount
+    # so a debit note can be issued against it later without recomputation.
+    is_debit_note: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+    items: Mapped[list["PurchaseReturnItem"]] = relationship(back_populates="purchase_return")
+
+
+class PurchaseReturnItem(Base, UUIDPKMixin):
+    __tablename__ = "purchase_return_items"
+
+    purchase_return_id: Mapped[uuid.UUID] = mapped_column(
+        GUID(), ForeignKey("purchase_returns.id"), nullable=False, index=True
+    )
+    original_grn_item_id: Mapped[uuid.UUID | None] = mapped_column(
+        GUID(), ForeignKey("goods_receipt_items.id"), nullable=True
+    )
+    product_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("products.id"), nullable=False)
+    batch_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("product_batches.id"), nullable=True)
+    quantity: Mapped[float] = mapped_column(Numeric(14, 3, asdecimal=False), nullable=False)
+    unit_cost: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False)
+    taxable_value: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
+    cgst_amount: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
+    sgst_amount: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
+    igst_amount: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
+    line_total: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
+
+    purchase_return: Mapped["PurchaseReturn"] = relationship(back_populates="items")

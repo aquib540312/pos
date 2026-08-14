@@ -57,6 +57,15 @@ class SalesReturnRepository:
         stmt = select(SalesReturn).where(SalesReturn.id == return_id).options(selectinload(SalesReturn.items))
         return self.db.execute(stmt).scalars().first()
 
+    def list(self, organization_id: uuid.UUID) -> list[SalesReturn]:
+        stmt = (
+            select(SalesReturn)
+            .where(SalesReturn.organization_id == organization_id)
+            .options(selectinload(SalesReturn.items))
+            .order_by(SalesReturn.return_date.desc())
+        )
+        return list(self.db.execute(stmt).scalars())
+
 
 class QuotationRepository:
     def __init__(self, db: Session):

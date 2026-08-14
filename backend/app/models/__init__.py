@@ -10,6 +10,7 @@ from app.models import (  # noqa: F401
     gst_filing,
     inventory,
     loyalty,
+    notifications,
     organization,
     party,
     payments,

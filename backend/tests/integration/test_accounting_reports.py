@@ -46,13 +46,16 @@ def test_goods_receipt_updates_supplier_payable_and_ledger(client, seeded_org, d
     from app.models.party import Supplier
 
     supplier = db_session.get(Supplier, supplier_id)
-    assert float(supplier.payable_balance) == 300.0
+    # 10 * 30 = 300 taxable + 18% GST (54) the supplier bills on it.
+    assert float(supplier.payable_balance) == 354.0
 
     entry = db_session.query(JournalEntry).filter_by(reference_type="goods_receipt").one()
     lines = db_session.query(JournalLine).filter_by(entry_id=entry.id).all()
     by_code = {db_session.get(LedgerAccount, line.account_id).code: (line.debit, line.credit) for line in lines}
     assert by_code["1200"] == (300.0, 0.0)  # Inventory debited
-    assert by_code["2000"] == (0.0, 300.0)  # Accounts Payable credited
+    assert by_code["2200"] == (27.0, 0.0)  # Input CGST receivable debited
+    assert by_code["2210"] == (27.0, 0.0)  # Input SGST receivable debited
+    assert by_code["2000"] == (0.0, 354.0)  # Accounts Payable credited
 
 
 def test_sale_and_return_post_balanced_journal_entries(client, seeded_org, db_session):

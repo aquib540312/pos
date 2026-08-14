@@ -1,5 +1,5 @@
 import uuid
-from datetime import date
+from datetime import date, datetime
 
 from pydantic import BaseModel
 
@@ -82,3 +82,62 @@ class CashierSalesRow(BaseModel):
     user_name: str
     invoice_count: int
     total_grand_total: float
+
+
+class ExpiringStockRow(BaseModel):
+    product_id: uuid.UUID
+    product_name: str
+    sku: str
+    warehouse_id: uuid.UUID
+    warehouse_name: str | None
+    batch_id: uuid.UUID
+    batch_number: str
+    quantity_on_hand: float
+    expiry_date: date | None
+    days_to_expiry: int | None
+
+
+class LowStockRow(BaseModel):
+    product_id: uuid.UUID
+    product_name: str
+    sku: str
+    barcode: str | None
+    uom_code: str | None
+    quantity_on_hand: float
+    reorder_level: float
+    below_reorder: bool
+
+
+class StockValuationRow(BaseModel):
+    product_id: uuid.UUID
+    product_name: str
+    sku: str
+    quantity_on_hand: float
+    average_cost: float
+    valuation: float
+
+
+class StockLedgerRow(BaseModel):
+    id: uuid.UUID
+    created_at: datetime
+    warehouse_id: uuid.UUID
+    product_id: uuid.UUID
+    batch_id: uuid.UUID | None
+    movement_type: str
+    quantity_delta: float
+    reference_type: str
+    reference_id: uuid.UUID
+    notes: str | None
+
+
+class DashboardResponse(BaseModel):
+    today_invoice_count: int
+    today_taxable_value: float
+    today_gst_total: float
+    today_grand_total: float
+    today_cash_sales: float
+    low_stock_count: int
+    expiring_soon_count: int
+    open_shifts: int
+    open_credit_outstanding: float
+    open_conflicts: int

@@ -20,6 +20,10 @@ import StockTransferPage from './pages/StockTransferPage'
 import BranchesPage from './pages/BranchesPage'
 import AuditLogPage from './pages/AuditLogPage'
 import QuotationsPage from './pages/QuotationsPage'
+import SalesHistoryPage from './pages/SalesHistoryPage'
+import StockPage from './pages/StockPage'
+import OffersPage from './pages/OffersPage'
+import SettingsPage from './pages/SettingsPage'
 
 export default function App() {
   return (
@@ -46,6 +50,10 @@ export default function App() {
             <Route path="/audit-log" element={<AuditLogPage />} />
             <Route path="/sync" element={<SyncDashboardPage />} />
             <Route path="/reports" element={<ReportsPage />} />
+            <Route path="/sales-history" element={<SalesHistoryPage />} />
+            <Route path="/stock" element={<StockPage />} />
+            <Route path="/offers" element={<OffersPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
           </Route>
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -1,31 +1,17 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { apiClient } from '../api/client'
-import type { StockSummaryReportRow } from '../types'
-
-interface SalesSummary {
-  invoice_count: number
-  total_taxable_value: number
-  total_cgst: number
-  total_sgst: number
-  total_igst: number
-  total_grand_total: number
-}
-
-function todayISO() {
-  return new Date().toISOString().slice(0, 10)
-}
+import type { DashboardStats, StockSummaryReportRow } from '../types'
 
 export default function DashboardPage() {
-  const [summary, setSummary] = useState<SalesSummary | null>(null)
+  const [stats, setStats] = useState<DashboardStats | null>(null)
   const [lowStock, setLowStock] = useState<StockSummaryReportRow[] | null>(null)
 
   useEffect(() => {
-    const today = todayISO()
     apiClient
-      .get<SalesSummary>('/reports/sales-summary', { params: { start: today, end: today } })
-      .then((res) => setSummary(res.data))
-      .catch(() => setSummary(null))
+      .get<DashboardStats>('/reports/dashboard')
+      .then((res) => setStats(res.data))
+      .catch(() => setStats(null))
     apiClient
       .get<StockSummaryReportRow[]>('/reports/stock-summary')
       .then((res) => setLowStock(res.data.filter((r) => r.below_reorder)))
@@ -33,21 +19,27 @@ export default function DashboardPage() {
   }, [])
 
   const cards = [
-    { label: "Today's Invoices", value: summary?.invoice_count ?? '—' },
-    { label: 'Taxable Value', value: summary ? `₹${summary.total_taxable_value.toFixed(2)}` : '—' },
-    { label: 'GST Collected', value: summary ? `₹${(summary.total_cgst + summary.total_sgst + summary.total_igst).toFixed(2)}` : '—' },
-    { label: 'Grand Total', value: summary ? `₹${summary.total_grand_total.toFixed(2)}` : '—' },
+    { label: "Today's Invoices", value: stats?.today_invoice_count ?? '—' },
+    { label: 'Taxable Value', value: stats ? `₹${stats.today_taxable_value.toFixed(2)}` : '—' },
+    { label: 'GST Collected', value: stats ? `₹${stats.today_gst_total.toFixed(2)}` : '—' },
+    { label: 'Grand Total', value: stats ? `₹${stats.today_grand_total.toFixed(2)}` : '—' },
     {
       label: 'Low Stock Items',
-      value: lowStock?.length ?? '—',
-      warn: Boolean(lowStock && lowStock.length > 0),
+      value: stats?.low_stock_count ?? '—',
+      warn: Boolean(stats && stats.low_stock_count > 0),
     },
+    {
+      label: 'Expiring Soon',
+      value: stats?.expiring_soon_count ?? '—',
+      warn: Boolean(stats && stats.expiring_soon_count > 0),
+    },
+    { label: 'Open Credit', value: stats ? `₹${stats.open_credit_outstanding.toFixed(2)}` : '—' },
   ]
 
   return (
     <div>
       <h1 className="mb-6 text-2xl font-semibold text-slate-900 dark:text-slate-50">Dashboard</h1>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {cards.map((card) => (
           <div
             key={card.label}

@@ -71,6 +71,7 @@ class SalesService:
         batch_id: uuid.UUID | None,
         quantity: float,
         sales_return_id: uuid.UUID,
+        movement_type: str = "sale_return",
     ) -> None:
         """Mirror of `_issue_stock_for_sale_line` for returns: a returned
         combo line restores stock to each component (scaled by the
@@ -81,11 +82,11 @@ class SalesService:
             for component in product.combo_components:
                 self.inventory.receive(
                     organization_id, warehouse_id, component.component_product_id, None,
-                    quantity * float(component.quantity), "sale_return", "sales_return", sales_return_id,
+                    quantity * float(component.quantity), movement_type, "sales_return", sales_return_id,
                 )
         else:
             self.inventory.receive(
-                organization_id, warehouse_id, product_id, batch_id, quantity, "sale_return", "sales_return",
+                organization_id, warehouse_id, product_id, batch_id, quantity, movement_type, "sales_return",
                 sales_return_id,
             )
 
@@ -372,6 +373,91 @@ class SalesService:
         self.accounting.post_sales_return(sales_return)
         self.db.flush()
         return sales_return
+
+    def list_returns(self, organization_id: uuid.UUID) -> list[SalesReturn]:
+        return self.returns.list(organization_id)
+
+    def get_return_or_404(self, return_id: uuid.UUID) -> SalesReturn:
+        sales_return = self.returns.get(return_id)
+        if sales_return is None:
+            raise NotFoundError(f"Sales return {return_id} not found")
+        return sales_return
+
+    def cancel_invoice(
+        self, organization_id: uuid.UUID, invoice_id: uuid.UUID, reason: str | None
+    ) -> SalesInvoice:
+        """Cancels a posted invoice BEFORE any return has been recorded
+        against it. Stock is issued back into the warehouse (matching
+        movement_type 'sale_cancel'), the invoice's credit + loyalty are
+        reversed on the customer, and the sale's double-entry posting is
+        reversed line-for-line. Returns are unaffected, but a cancelled
+        invoice can never be returned against again (its lines are gone
+        from the sale in the accounting sense)."""
+        invoice = self.invoices.get(invoice_id)
+        if invoice is None:
+            raise NotFoundError(f"Invoice {invoice_id} not found")
+        if invoice.status != "posted":
+            raise ConflictError(f"Invoice {invoice.invoice_number} is not in posted status")
+
+        # Refuse to cancel once any return exists against this invoice.
+        existing_returns = self.returns.list(organization_id)
+        if any(r.original_invoice_id == invoice.id for r in existing_returns):
+            raise ConflictError(
+                f"Invoice {invoice.invoice_number} has recorded returns -- use a return to correct it, not a cancel"
+            )
+
+        # Restore stock from every invoice line (combo-safe via the same
+        # receive path used by returns).
+        warehouse_id = self._warehouse_for_invoice(invoice)
+        for line in invoice.items:
+            self._receive_stock_for_return_line(
+                organization_id, warehouse_id, line.product_id, line.batch_id, float(line.quantity), invoice.id,
+                movement_type="sale_cancel",
+            )
+
+        # Reverse loyalty earned and credit balance owed at posting time.
+        if invoice.customer_id:
+            customer = self.customers.get(invoice.customer_id)
+            if customer is not None:
+                if float(invoice.loyalty_points_earned) > 0:
+                    customer.loyalty_points_balance = max(
+                        0.0, float(customer.loyalty_points_balance) - float(invoice.loyalty_points_earned)
+                    )
+                if float(invoice.loyalty_points_redeemed) > 0:
+                    customer.loyalty_points_balance = float(customer.loyalty_points_balance) + float(invoice.loyalty_points_redeemed)
+                if invoice.is_credit_sale:
+                    shortfall = round(
+                        float(invoice.grand_total) - sum(float(p.amount) for p in invoice.payments), 2
+                    )
+                    self.party.record_credit_payment(customer, max(0.0, shortfall))
+
+        # Restore coupon redemption count.
+        if invoice.coupon_code:
+            self.coupons.revoke(organization_id, invoice.coupon_code)
+
+        invoice.status = "cancelled"
+        self.db.flush()
+        self.accounting.post_sale_cancellation(invoice)
+        self.db.flush()
+        return self.invoices.get(invoice.id)
+
+    def _warehouse_for_invoice(self, invoice: SalesInvoice) -> uuid.UUID:
+        """Re-derive the warehouse stock was issued from at posting time.
+        Stock ledger entries carry reference_type='sales_invoice' and the
+        invoice id, so the warehouse is whatever those were written against."""
+        from app.models.inventory import StockLedgerEntry
+
+        row = (
+            self.db.query(StockLedgerEntry)
+            .filter(
+                StockLedgerEntry.reference_type == "sales_invoice",
+                StockLedgerEntry.reference_id == invoice.id,
+            )
+            .first()
+        )
+        if row is None:
+            raise NotFoundError(f"No stock ledger entries found for invoice {invoice.invoice_number}")
+        return row.warehouse_id
 
 
 class QuotationService:

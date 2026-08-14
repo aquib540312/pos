@@ -1,3 +1,4 @@
+import uuid
 from datetime import date
 
 from fastapi import APIRouter, Depends, Query
@@ -10,16 +11,57 @@ from app.models.rbac import User
 from app.modules.reports.schemas import (
     BalanceSheetResponse,
     CashierSalesRow,
+    DashboardResponse,
+    ExpiringStockRow,
     GSTR1LineRow,
+    LowStockRow,
     PaymentMethodBreakdownRow,
     ProfitAndLossResponse,
     SalesSummaryResponse,
+    StockLedgerRow,
     StockSummaryRow,
+    StockValuationRow,
     TopProductRow,
 )
 from app.modules.reports.service import ReportService
 
 router = APIRouter(prefix="/api/v1/reports", tags=["reports"])
+
+
+@router.get("/dashboard", response_model=DashboardResponse)
+def dashboard(db: Session = Depends(get_db), user: User = Depends(require_permission(Perm.REPORTS_VIEW))):
+    result = ReportService(db).dashboard(user.organization_id)
+    db.commit()
+    return result
+
+
+@router.get("/expiring-stock", response_model=list[ExpiringStockRow])
+def expiring_stock(
+    within_days: int = Query(default=30, ge=1, le=365),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission(Perm.REPORTS_VIEW)),
+):
+    return ReportService(db).expiring_stock(user.organization_id, within_days)
+
+
+@router.get("/low-stock", response_model=list[LowStockRow])
+def low_stock(db: Session = Depends(get_db), user: User = Depends(require_permission(Perm.REPORTS_VIEW))):
+    return ReportService(db).low_stock(user.organization_id)
+
+
+@router.get("/stock-valuation", response_model=list[StockValuationRow])
+def stock_valuation(db: Session = Depends(get_db), user: User = Depends(require_permission(Perm.REPORTS_VIEW))):
+    return ReportService(db).stock_valuation(user.organization_id)
+
+
+@router.get("/stock-ledger", response_model=list[StockLedgerRow])
+def stock_ledger(
+    product_id: uuid.UUID = Query(...),
+    limit: int = Query(default=100, ge=1, le=500),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission(Perm.REPORTS_VIEW)),
+):
+    return ReportService(db).stock_ledger(user.organization_id, product_id, limit)
 
 
 @router.get("/sales-summary", response_model=SalesSummaryResponse)

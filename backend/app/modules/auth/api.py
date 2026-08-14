@@ -11,6 +11,7 @@ from app.db.session import get_db
 from app.models.rbac import User
 from app.modules.audit.service import write_audit_log
 from app.modules.auth.schemas import (
+    ChangePasswordRequest,
     ForgotPasswordRequest,
     ResetPasswordRequest,
     SignupRequest,
@@ -99,6 +100,22 @@ def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db))
 @router.get("/me", response_model=UserResponse)
 def me(user: User = Depends(get_current_user)) -> UserResponse:
     return _to_user_response(user)
+
+
+@router.post("/change-password", status_code=status.HTTP_200_OK)
+def change_password(
+    payload: ChangePasswordRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict[str, str]:
+    try:
+        AuthService(db).change_password(user.id, payload.current_password, payload.new_password)
+        write_audit_log(db, user.organization_id, user.id, "auth.change_password", "user", user.id)
+        db.commit()
+    except (AuthenticationError, NotFoundError) as exc:
+        db.rollback()
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, str(exc)) from exc
+    return {"status": "Password updated."}
 
 
 @router.get("/users", response_model=list[UserResponse])

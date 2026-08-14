@@ -9,6 +9,12 @@ class CategoryCreateRequest(BaseModel):
     parent_id: uuid.UUID | None = None
 
 
+class CategoryUpdateRequest(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    parent_id: uuid.UUID | None = None
+    remove_parent: bool = False
+
+
 class CategoryResponse(BaseModel):
     id: uuid.UUID
     name: str
@@ -20,6 +26,11 @@ class CategoryResponse(BaseModel):
 class UOMCreateRequest(BaseModel):
     code: str = Field(min_length=1, max_length=10)
     name: str = Field(min_length=1, max_length=50)
+
+
+class UOMUpdateRequest(BaseModel):
+    code: str | None = Field(default=None, min_length=1, max_length=10)
+    name: str | None = Field(default=None, min_length=1, max_length=50)
 
 
 class UOMResponse(BaseModel):
@@ -37,6 +48,18 @@ class HSNCreateRequest(BaseModel):
     rate_percent: float = Field(ge=0, le=100)
     cess_percent: float = Field(default=0, ge=0, le=100)
     effective_from: date
+
+
+class HSNUpdateRequest(BaseModel):
+    code: str | None = Field(default=None, min_length=2, max_length=8)
+    description: str | None = Field(default=None, max_length=255)
+    is_service: bool | None = None
+    # Only applied when provided (creates a *new* versioned TaxRate row so
+    # historical invoices keep their old rates).
+    rate_percent: float | None = Field(default=None, ge=0, le=100)
+    cess_percent: float | None = Field(default=None, ge=0, le=100)
+    effective_from: date | None = None
+    remove_description: bool = False
 
 
 class HSNResponse(BaseModel):
@@ -71,6 +94,29 @@ class ProductCreateRequest(BaseModel):
     reorder_level: float = Field(ge=0, default=0)
     is_combo: bool = False
     combo_components: list[ComboComponentRequest] = Field(default_factory=list)
+
+
+class ProductUpdateRequest(BaseModel):
+    """Partial product edit. Only the fields provided are applied; None
+    means 'leave unchanged' (use remove_barcode / remove_description to
+    clear a nullable field explicitly)."""
+
+    sku: str | None = Field(default=None, min_length=1, max_length=64)
+    barcode: str | None = Field(default=None, max_length=64)
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    description: str | None = Field(default=None, max_length=1000)
+    category_id: uuid.UUID | None = None
+    hsn_code_id: uuid.UUID | None = None
+    uom_id: uuid.UUID | None = None
+    mrp: float | None = Field(default=None, ge=0)
+    sale_price: float | None = Field(default=None, ge=0)
+    purchase_price: float | None = Field(default=None, ge=0)
+    reorder_level: float | None = Field(default=None, ge=0)
+    is_active: bool | None = None
+    # Pydantic treats {"barcode": None} as "not provided" by default, so
+    # explicit clearing of nullable fields needs dedicated flags.
+    remove_barcode: bool = False
+    remove_description: bool = False
 
 
 class ComboComponentResponse(BaseModel):

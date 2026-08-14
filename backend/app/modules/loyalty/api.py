@@ -1,3 +1,5 @@
+import uuid
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -18,6 +20,30 @@ from app.modules.loyalty.schemas import (
 from app.modules.loyalty.service import CouponService, GiftCardService
 
 router = APIRouter(prefix="/api/v1/loyalty", tags=["loyalty"])
+
+
+@router.get("/coupons", response_model=list[CouponResponse])
+def list_coupons(
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission(Perm.CATALOG_MANAGE)),
+):
+    return CouponService(db).list_coupons(user.organization_id)
+
+
+@router.patch("/coupons/{coupon_id}/deactivate", response_model=CouponResponse)
+def deactivate_coupon(
+    coupon_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission(Perm.CATALOG_MANAGE)),
+):
+    service = CouponService(db)
+    try:
+        coupon = service.deactivate_coupon(user.organization_id, coupon_id)
+        db.commit()
+    except NotFoundError as exc:
+        db.rollback()
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
+    return coupon
 
 
 @router.post("/coupons", response_model=CouponResponse, status_code=status.HTTP_201_CREATED)
@@ -60,6 +86,30 @@ def issue_gift_card(
     except ConflictError as exc:
         db.rollback()
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    return card
+
+
+@router.get("/gift-cards", response_model=list[GiftCardResponse])
+def list_gift_cards(
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission(Perm.CATALOG_MANAGE)),
+):
+    return GiftCardService(db).list_gift_cards(user.organization_id)
+
+
+@router.patch("/gift-cards/{card_id}/deactivate", response_model=GiftCardResponse)
+def deactivate_gift_card(
+    card_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission(Perm.CATALOG_MANAGE)),
+):
+    service = GiftCardService(db)
+    try:
+        card = service.deactivate_gift_card(user.organization_id, card_id)
+        db.commit()
+    except NotFoundError as exc:
+        db.rollback()
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
     return card
 
 

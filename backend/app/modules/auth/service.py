@@ -204,3 +204,12 @@ class AuthService:
         user.hashed_password = hash_password(new_password)
         reset_token.used_at = datetime.now(timezone.utc)
         self.db.flush()
+
+    def change_password(self, user_id: uuid.UUID, current_password: str, new_password: str) -> None:
+        """Authenticated password change -- the user must prove they know
+        their current password (unlike the token-based reset flow)."""
+        user = self.get_user_or_404(user_id)
+        if not verify_password(current_password, user.hashed_password):
+            raise AuthenticationError("Current password is incorrect")
+        user.hashed_password = hash_password(new_password)
+        self.db.flush()

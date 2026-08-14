@@ -3,11 +3,13 @@ import { apiClient, apiErrorMessage } from '../api/client'
 import type {
   BalanceSheetReport,
   CashierSalesReportRow,
+  ExpiringStockRow,
   GSTR1ReportRow,
   PaymentBreakdownReportRow,
   ProfitAndLossReport,
   SalesSummaryReport,
   StockSummaryReportRow,
+  StockValuationRow,
   TopProductReportRow,
 } from '../types'
 
@@ -17,6 +19,8 @@ type TabKey =
   | 'payment-breakdown'
   | 'sales-by-cashier'
   | 'stock-summary'
+  | 'expiring-stock'
+  | 'stock-valuation'
   | 'gstr1'
   | 'profit-and-loss'
   | 'balance-sheet'
@@ -27,6 +31,8 @@ const TABS: { key: TabKey; label: string; needsDateRange: boolean; needsAsOf?: b
   { key: 'payment-breakdown', label: 'Payment Breakdown', needsDateRange: true },
   { key: 'sales-by-cashier', label: 'Sales by Cashier', needsDateRange: true },
   { key: 'stock-summary', label: 'Stock Summary', needsDateRange: false },
+  { key: 'expiring-stock', label: 'Expiring Stock', needsDateRange: false },
+  { key: 'stock-valuation', label: 'Stock Valuation', needsDateRange: false },
   { key: 'gstr1', label: 'GSTR-1', needsDateRange: true },
   { key: 'profit-and-loss', label: 'Profit & Loss', needsDateRange: true },
   { key: 'balance-sheet', label: 'Balance Sheet', needsDateRange: false, needsAsOf: true },
@@ -53,6 +59,8 @@ export default function ReportsPage() {
   const [paymentBreakdown, setPaymentBreakdown] = useState<PaymentBreakdownReportRow[]>([])
   const [cashierSales, setCashierSales] = useState<CashierSalesReportRow[]>([])
   const [stockSummary, setStockSummary] = useState<StockSummaryReportRow[]>([])
+  const [expiringStock, setExpiringStock] = useState<ExpiringStockRow[]>([])
+  const [stockValuation, setStockValuation] = useState<StockValuationRow[]>([])
   const [gstr1, setGstr1] = useState<GSTR1ReportRow[]>([])
   const [profitAndLoss, setProfitAndLoss] = useState<ProfitAndLossReport | null>(null)
   const [balanceSheet, setBalanceSheet] = useState<BalanceSheetReport | null>(null)
@@ -85,6 +93,16 @@ export default function ReportsPage() {
         case 'stock-summary': {
           const res = await apiClient.get<StockSummaryReportRow[]>('/reports/stock-summary')
           setStockSummary(res.data)
+          break
+        }
+        case 'expiring-stock': {
+          const res = await apiClient.get<ExpiringStockRow[]>('/reports/expiring-stock')
+          setExpiringStock(res.data)
+          break
+        }
+        case 'stock-valuation': {
+          const res = await apiClient.get<StockValuationRow[]>('/reports/stock-valuation')
+          setStockValuation(res.data)
           break
         }
         case 'gstr1': {
@@ -234,6 +252,44 @@ export default function ReportsPage() {
           ])}
           emptyText="No products found."
         />
+      )}
+
+      {activeTab === 'expiring-stock' && (
+        <Table
+          columns={['Product', 'SKU', 'Batch', 'Warehouse', 'Qty', 'Expiry', 'Days Left']}
+          rows={expiringStock.map((r) => [
+            r.product_name,
+            r.sku,
+            r.batch_number,
+            r.warehouse_name ?? r.warehouse_id.slice(0, 8),
+            r.quantity_on_hand.toString(),
+            r.expiry_date,
+            r.days_to_expiry === null ? '—' : r.days_to_expiry.toString(),
+          ])}
+          emptyText="No expiring stock."
+        />
+      )}
+
+      {activeTab === 'stock-valuation' && (
+        <div>
+          <p className="mb-3 text-sm text-slate-600 dark:text-slate-300">
+            Total valuation:{' '}
+            <span className="font-semibold text-slate-900 dark:text-slate-50">
+              {inr(stockValuation.reduce((sum, r) => sum + r.valuation, 0))}
+            </span>
+          </p>
+          <Table
+            columns={['Product', 'SKU', 'Qty on Hand', 'Avg Cost', 'Valuation']}
+            rows={stockValuation.map((r) => [
+              r.product_name,
+              r.sku,
+              r.quantity_on_hand.toString(),
+              inr(r.average_cost),
+              inr(r.valuation),
+            ])}
+            emptyText="No stock valuation data."
+          />
+        </div>
       )}
 
       {activeTab === 'gstr1' && (

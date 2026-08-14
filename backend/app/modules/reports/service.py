@@ -1,25 +1,34 @@
 import uuid
-from datetime import date, datetime, time, timezone
+from datetime import date, datetime, time, timedelta, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.accounting import JournalEntry, JournalLine, LedgerAccount
 from app.models.billing import Payment, Shift
-from app.models.catalog import HSNCode, Product
-from app.models.inventory import StockItem
+from app.models.catalog import HSNCode, Product, ProductBatch, UnitOfMeasure
+from app.models.inventory import StockItem, StockLedgerEntry
+from app.models.organization import Warehouse
+from app.models.party import Customer
 from app.models.rbac import User
 from app.models.sales import SalesInvoice, SalesInvoiceItem
+from app.models.sync import SyncConflict
 from app.modules.gst_filing.schema_builder import B2BInvoiceLine, B2BInvoiceRateItem, B2CSLine
+from app.modules.notifications.service import NotificationService
 from app.modules.reports.schemas import (
     BalanceSheetResponse,
     CashierSalesRow,
+    DashboardResponse,
+    ExpiringStockRow,
     GSTR1LineRow,
     LedgerAccountLine,
+    LowStockRow,
     PaymentMethodBreakdownRow,
     ProfitAndLossResponse,
     SalesSummaryResponse,
+    StockLedgerRow,
     StockSummaryRow,
+    StockValuationRow,
     TopProductRow,
 )
 
@@ -432,3 +441,207 @@ class ReportService:
             CashierSalesRow(user_id=uid, user_name=name, invoice_count=count, total_grand_total=float(total))
             for uid, name, count, total in self.db.execute(stmt).all()
         ]
+
+    def expiring_stock(self, organization_id: uuid.UUID, within_days: int) -> list[ExpiringStockRow]:
+        """Batches whose expiry is <= `within_days` from today (or already
+        expired), with positive on-hand quantity at some warehouse."""
+        cutoff = date.today() + timedelta(days=within_days)
+        stmt = (
+            select(
+                Product.id,
+                Product.name,
+                Product.sku,
+                StockItem.warehouse_id,
+                Warehouse.name,
+                StockItem.batch_id,
+                ProductBatch.batch_number,
+                StockItem.quantity_on_hand,
+                ProductBatch.expiry_date,
+            )
+            .join(ProductBatch, ProductBatch.id == StockItem.batch_id)
+            .join(Product, Product.id == ProductBatch.product_id)
+            .outerjoin(Warehouse, Warehouse.id == StockItem.warehouse_id)
+            .where(
+                StockItem.organization_id == organization_id,
+                ProductBatch.expiry_date.is_not(None),
+                ProductBatch.expiry_date <= cutoff,
+                StockItem.quantity_on_hand > 0,
+            )
+            .order_by(ProductBatch.expiry_date.asc())
+        )
+        rows = []
+        for pid, name, sku, wh_id, wh_name, batch_id, batch_number, qty, expiry in self.db.execute(stmt).all():
+            days = (expiry - date.today()).days if expiry else None
+            rows.append(
+                ExpiringStockRow(
+                    product_id=pid, product_name=name, sku=sku, warehouse_id=wh_id, warehouse_name=wh_name,
+                    batch_id=batch_id, batch_number=batch_number, quantity_on_hand=float(qty),
+                    expiry_date=expiry, days_to_expiry=days,
+                )
+            )
+        return rows
+
+    def low_stock(self, organization_id: uuid.UUID) -> list[LowStockRow]:
+        """Products at or below their reorder level (the "below_reorder"
+        flag the stock-summary report already computes, but packaged as a
+        standalone actionable list -- only the products that need
+        reordering, tagged with their UOM)."""
+        stmt = (
+            select(
+                Product.id,
+                Product.name,
+                Product.sku,
+                Product.barcode,
+                UnitOfMeasure.code,
+                func.coalesce(func.sum(StockItem.quantity_on_hand), 0),
+                Product.reorder_level,
+            )
+            .outerjoin(StockItem, StockItem.product_id == Product.id)
+            .outerjoin(UnitOfMeasure, UnitOfMeasure.id == Product.uom_id)
+            .where(Product.organization_id == organization_id, Product.is_active.is_(True))
+            .group_by(Product.id, Product.name, Product.sku, Product.barcode, UnitOfMeasure.code, Product.reorder_level)
+        )
+        rows = []
+        for pid, name, sku, barcode, uom_code, qty, reorder in self.db.execute(stmt).all():
+            qty = float(qty)
+            reorder = float(reorder)
+            if qty <= reorder:
+                rows.append(
+                    LowStockRow(
+                        product_id=pid, product_name=name, sku=sku, barcode=barcode, uom_code=uom_code,
+                        quantity_on_hand=qty, reorder_level=reorder, below_reorder=qty <= reorder,
+                    )
+                )
+        return rows
+
+    def stock_valuation(self, organization_id: uuid.UUID) -> list[StockValuationRow]:
+        """On-hand quantity x the product's purchase price (approximate
+        cost) per product, plus the aggrated valuation. The purchase-price
+        proxy is a deliberate simplification -- a proper weighted-average
+        cost would come from batch purchase_price, which is also available
+        here but the product-level number is what a re-order decision needs."""
+        stmt = (
+            select(
+                Product.id,
+                Product.name,
+                Product.sku,
+                func.coalesce(func.sum(StockItem.quantity_on_hand), 0),
+            )
+            .outerjoin(StockItem, StockItem.product_id == Product.id)
+            .where(Product.organization_id == organization_id, Product.is_active.is_(True))
+            .group_by(Product.id, Product.name, Product.sku)
+        )
+        rows = []
+        for pid, name, sku, qty in self.db.execute(stmt).all():
+            qty = float(qty)
+            if qty <= 0:
+                continue
+            product = self.db.get(Product, pid)
+            average_cost = float(product.purchase_price) if product else 0
+            rows.append(
+                StockValuationRow(
+                    product_id=pid, product_name=name, sku=sku, quantity_on_hand=qty,
+                    average_cost=average_cost, valuation=round(qty * average_cost, 2),
+                )
+            )
+        return rows
+
+    def stock_ledger(self, organization_id: uuid.UUID, product_id: uuid.UUID, limit: int = 100) -> list[StockLedgerRow]:
+        """Immutable stock-movement history for one product, newest first."""
+        stmt = (
+            select(StockLedgerEntry)
+            .where(StockLedgerEntry.organization_id == organization_id, StockLedgerEntry.product_id == product_id)
+            .order_by(StockLedgerEntry.created_at.desc())
+            .limit(limit)
+        )
+        return [
+            StockLedgerRow(
+                id=e.id, created_at=e.created_at, warehouse_id=e.warehouse_id, product_id=e.product_id,
+                batch_id=e.batch_id, movement_type=e.movement_type, quantity_delta=float(e.quantity_delta),
+                reference_type=e.reference_type, reference_id=e.reference_id, notes=e.notes,
+            )
+            for e in self.db.execute(stmt).scalars().all()
+        ]
+
+    def dashboard(self, organization_id: uuid.UUID) -> DashboardResponse:
+        """The numbers a till manager wants at a glance: today's sales,
+        low-stock and expiring-stock counts, open shifts, and outstanding
+        customer credit."""
+        today = date.today()
+        start_dt = datetime.combine(today, time.min, tzinfo=timezone.utc)
+        end_dt = datetime.combine(today, time.max, tzinfo=timezone.utc)
+
+        stmt = select(
+            func.count(SalesInvoice.id),
+            func.coalesce(func.sum(SalesInvoice.taxable_total), 0),
+            func.coalesce(func.sum(SalesInvoice.cgst_total + SalesInvoice.sgst_total + SalesInvoice.igst_total), 0),
+            func.coalesce(func.sum(SalesInvoice.grand_total), 0),
+        ).where(
+            SalesInvoice.organization_id == organization_id,
+            SalesInvoice.status == "posted",
+            SalesInvoice.invoice_date >= start_dt,
+            SalesInvoice.invoice_date <= end_dt,
+        )
+        inv_count, taxable, gst, grand = self.db.execute(stmt).one()
+
+        cash_stmt = select(func.coalesce(func.sum(Payment.amount), 0)).join(
+            SalesInvoice, SalesInvoice.id == Payment.invoice_id
+        ).where(
+            SalesInvoice.organization_id == organization_id,
+            SalesInvoice.status == "posted",
+            SalesInvoice.invoice_date >= start_dt,
+            SalesInvoice.invoice_date <= end_dt,
+            Payment.method == "cash",
+        )
+        cash_sales = self.db.execute(cash_stmt).scalar_one()
+
+        low_count = len(self.low_stock(organization_id))
+        expiring_count = len(self.expiring_stock(organization_id, within_days=30))
+        self._sync_alert_notifications(organization_id)
+
+        open_shifts = self.db.execute(
+            select(func.count(Shift.id)).where(Shift.organization_id == organization_id, Shift.status == "open")
+        ).scalar_one()
+
+        credit_outstanding = self.db.execute(
+            select(func.coalesce(func.sum(Customer.credit_balance), 0)).where(
+                Customer.organization_id == organization_id, Customer.is_credit_customer.is_(True)
+            )
+        ).scalar_one()
+
+        conflicts = self.db.execute(
+            select(func.count(SyncConflict.id)).where(
+                SyncConflict.organization_id == organization_id, SyncConflict.status == "open"
+            )
+        ).scalar_one()
+
+        return DashboardResponse(
+            today_invoice_count=inv_count,
+            today_taxable_value=float(taxable),
+            today_gst_total=float(gst),
+            today_grand_total=float(grand),
+            today_cash_sales=float(cash_sales),
+            low_stock_count=low_count,
+            expiring_soon_count=expiring_count,
+            open_shifts=open_shifts,
+            open_credit_outstanding=float(credit_outstanding),
+            open_conflicts=conflicts,
+        )
+
+    def _sync_alert_notifications(self, organization_id: uuid.UUID) -> None:
+        """Create in-app notifications for open dashboard alerts (low stock,
+        expiring stock). Deduplicated per product in NotificationService, so
+        the bell badge doesn't balloon on every dashboard load."""
+        try:
+            low_stock_rows = self.low_stock(organization_id)
+            expiring_rows = self.expiring_stock(organization_id, within_days=30)
+            NotificationService(self.db).sync_alerts(
+                organization_id,
+                [(r.product_id, r.product_name, r.sku, r.quantity_on_hand) for r in low_stock_rows],
+                [
+                    (r.product_id, r.product_name, r.sku, r.batch_number, r.days_to_expiry or 0)
+                    for r in expiring_rows
+                ],
+            )
+        except Exception:  # pragma: no cover - alert sync must never break the dashboard
+            pass

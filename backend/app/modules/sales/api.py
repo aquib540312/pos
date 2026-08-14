@@ -16,12 +16,15 @@ from app.core.exceptions import (
 from app.core.permissions import Perm
 from app.db.session import get_db
 from app.models.rbac import User
+from app.modules.audit.service import write_audit_log
 from app.modules.notifications.tasks import send_notification_task
 from app.modules.sales.schemas import (
+    CancelSaleRequest,
     QuotationConvertRequest,
     QuotationCreateRequest,
     QuotationResponse,
     ReturnCreateRequest,
+    ReturnDetailResponse,
     ReturnResponse,
     SaleCreateRequest,
     SaleInvoiceResponse,
@@ -168,6 +171,26 @@ def convert_quotation(
     return invoice
 
 
+@router.get("/returns", response_model=list[ReturnResponse])
+def list_returns(
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission(Perm.SALES_RETURN)),
+):
+    return SalesService(db).list_returns(user.organization_id)
+
+
+@router.get("/returns/{return_id}", response_model=ReturnDetailResponse)
+def get_return(
+    return_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission(Perm.SALES_RETURN)),
+):
+    try:
+        return SalesService(db).get_return_or_404(return_id)
+    except DomainError as exc:
+        _handle(exc, db)
+
+
 @router.get("/{invoice_id}", response_model=SaleInvoiceResponse)
 def get_sale(
     invoice_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(require_permission(Perm.REPORTS_VIEW))
@@ -219,6 +242,8 @@ def create_return(
     original = service.invoices.get(payload.original_invoice_id)
     if original is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Original invoice not found")
+    if original.status != "posted":
+        raise HTTPException(status.HTTP_409_CONFLICT, "Only a posted invoice can have a return recorded")
     try:
         sales_return = service.create_return(
             organization_id=user.organization_id,
@@ -233,3 +258,20 @@ def create_return(
     except DomainError as exc:
         _handle(exc, db)
     return sales_return
+
+
+@router.post("/{invoice_id}/cancel", response_model=SaleInvoiceResponse)
+def cancel_sale(
+    invoice_id: uuid.UUID,
+    payload: CancelSaleRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission(Perm.SALES_RETURN)),
+):
+    service = SalesService(db)
+    try:
+        invoice = service.cancel_invoice(user.organization_id, invoice_id, payload.reason)
+        write_audit_log(db, user.organization_id, user.id, "sales.cancel", "sales_invoice", invoice.id)
+        db.commit()
+    except DomainError as exc:
+        _handle(exc, db)
+    return invoice
