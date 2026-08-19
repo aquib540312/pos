@@ -639,7 +639,7 @@ export default function RestaurantPage() {
         </div>
       )}
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[260px_minmax(0,1fr)_360px]">
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 sm:grid-cols-[200px_minmax(0,1fr)] xl:grid-cols-[220px_minmax(0,1fr)_320px] 2xl:grid-cols-[260px_minmax(0,1fr)_380px]">
         <TablesPanel
           tables={visibleTables}
           orderByTable={tableMap}
@@ -672,12 +672,12 @@ export default function RestaurantPage() {
           onShowOrder={() => setShowOrderDrawer(true)}
         />
 
-        <div className="hidden lg:block">
+        <div className="hidden xl:block">
           <OrderPanel {...orderPanelProps} />
         </div>
       </div>
 
-      <div className="sticky bottom-0 z-20 mt-2 lg:hidden">
+      <div className="sticky bottom-0 z-20 mt-2 xl:hidden">
         {order && (
           <button
             onClick={() => setShowOrderDrawer(true)}
@@ -692,7 +692,7 @@ export default function RestaurantPage() {
       </div>
 
       <div
-        className={`fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm transition-opacity lg:hidden ${
+        className={`fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm transition-opacity xl:hidden ${
           showOrderDrawer ? 'opacity-100' : 'pointer-events-none opacity-0'
         }`}
         onClick={() => setShowOrderDrawer(false)}
@@ -910,7 +910,7 @@ function MenuPanel({
           />
           <button
             onClick={onShowOrder}
-            className="relative rounded-lg bg-slate-800 px-3 py-2 text-xs font-semibold text-white dark:bg-slate-600 lg:hidden"
+            className="relative rounded-lg bg-slate-800 px-3 py-2 text-xs font-semibold text-white dark:bg-slate-600 xl:hidden"
           >
             Order
             {pendingCount + preparingCount + readyCount > 0 && (
