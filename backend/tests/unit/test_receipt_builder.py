@@ -54,3 +54,29 @@ def test_render_receipt_shows_coupon_line_when_present():
     render_receipt(printer, invoice)
     text = printer.output.decode("latin1")
     assert "SAVE10" in text
+
+
+def test_render_receipt_shows_business_header_and_footer():
+    invoice = _sample_invoice()
+    invoice["business"] = {
+        "legal_name": "Acme Trading Pvt Ltd",
+        "trade_name": "Acme Mart",
+        "gstin": "27AAAAA0000A1Z5",
+        "address": "12 MG Road, Mumbai 400001",
+        "phone": "+91 98200 12345",
+    }
+    invoice["footer_note"] = "No returns after 7 days."
+    printer = Dummy()
+    render_receipt(printer, invoice)
+    text = printer.output.decode("latin1")
+    assert "Acme Mart" in text
+    assert "GSTIN: 27AAAAA0000A1Z5" in text
+    assert "Tel: +91 98200 12345" in text
+    assert "No returns after 7 days." in text
+
+
+def test_render_receipt_without_business_falls_back_to_thanks_note():
+    printer = Dummy()
+    render_receipt(printer, _sample_invoice())
+    text = printer.output.decode("latin1")
+    assert "Thank you" in text

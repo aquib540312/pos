@@ -71,13 +71,15 @@ class PrintService:
             return False
 
 
-def invoice_to_print_payload(invoice, product_names: dict) -> dict:
+def invoice_to_print_payload(invoice, product_names: dict, business: dict | None = None) -> dict:
     """Flattens a SalesInvoice ORM object (with items/payments loaded)
     into the plain dict `render_receipt` expects, decoupling the printer
     formatting code from the ORM. `product_names` maps product_id -> name
     (built by the caller, which already has catalog access) since
     SalesInvoiceItem only stores the product_id FK, not a denormalized
-    name."""
+    name. `business` optionally carries org branding (trade/legal name,
+    GSTIN, address, phone, footer_note) printed above and below the line
+    items."""
     return {
         "invoice_number": invoice.invoice_number,
         "invoice_date": invoice.invoice_date.strftime("%d-%b-%Y %H:%M"),
@@ -99,4 +101,6 @@ def invoice_to_print_payload(invoice, product_names: dict) -> dict:
         "round_off": float(invoice.round_off),
         "grand_total": float(invoice.grand_total),
         "payments": [{"method": p.method, "amount": float(p.amount)} for p in invoice.payments],
+        "business": business,
+        "footer_note": business.get("footer_note") if business else None,
     }

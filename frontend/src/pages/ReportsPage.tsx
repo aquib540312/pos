@@ -10,6 +10,9 @@ import type {
   SalesSummaryReport,
   StockSummaryReportRow,
   StockValuationRow,
+  Supplier,
+  SupplierPurchaseReturnLedgerRow,
+  SupplierPurchaseReturnRow,
   TopProductReportRow,
 } from '../types'
 
@@ -18,6 +21,7 @@ type TabKey =
   | 'top-products'
   | 'payment-breakdown'
   | 'sales-by-cashier'
+  | 'supplier-purchase-returns'
   | 'stock-summary'
   | 'expiring-stock'
   | 'stock-valuation'
@@ -30,6 +34,7 @@ const TABS: { key: TabKey; label: string; needsDateRange: boolean; needsAsOf?: b
   { key: 'top-products', label: 'Top Products', needsDateRange: true },
   { key: 'payment-breakdown', label: 'Payment Breakdown', needsDateRange: true },
   { key: 'sales-by-cashier', label: 'Sales by Cashier', needsDateRange: true },
+  { key: 'supplier-purchase-returns', label: 'Supplier Buy vs Return', needsDateRange: true },
   { key: 'stock-summary', label: 'Stock Summary', needsDateRange: false },
   { key: 'expiring-stock', label: 'Expiring Stock', needsDateRange: false },
   { key: 'stock-valuation', label: 'Stock Valuation', needsDateRange: false },
@@ -44,6 +49,10 @@ function todayISO() {
 
 function inr(n: number) {
   return `₹${n.toFixed(2)}`
+}
+
+function formatDate(iso: string) {
+  return new Date(`${iso}T00:00:00`).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
 export default function ReportsPage() {
@@ -64,6 +73,10 @@ export default function ReportsPage() {
   const [gstr1, setGstr1] = useState<GSTR1ReportRow[]>([])
   const [profitAndLoss, setProfitAndLoss] = useState<ProfitAndLossReport | null>(null)
   const [balanceSheet, setBalanceSheet] = useState<BalanceSheetReport | null>(null)
+  const [supplierPurchaseReturns, setSupplierPurchaseReturns] = useState<SupplierPurchaseReturnRow[]>([])
+  const [suppliers, setSuppliers] = useState<Supplier[]>([])
+  const [selectedSupplierId, setSelectedSupplierId] = useState('')
+  const [supplierLedger, setSupplierLedger] = useState<SupplierPurchaseReturnLedgerRow[]>([])
 
   async function load(tab: TabKey) {
     setError(null)
@@ -120,6 +133,18 @@ export default function ReportsPage() {
           setBalanceSheet(res.data)
           break
         }
+        case 'supplier-purchase-returns': {
+          const [res, suppRes] = await Promise.all([
+            apiClient.get<SupplierPurchaseReturnRow[]>('/reports/supplier-purchase-returns', { params: { start, end } }),
+            apiClient.get<Supplier[]>('/party/suppliers'),
+          ])
+          setSupplierPurchaseReturns(res.data)
+          setSuppliers(suppRes.data)
+          if (!selectedSupplierId && suppRes.data.length > 0) {
+            setSelectedSupplierId(suppRes.data[0].id)
+          }
+          break
+        }
       }
     } catch (err) {
       setError(apiErrorMessage(err))
@@ -132,6 +157,26 @@ export default function ReportsPage() {
     load(activeTab)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab])
+
+  async function loadSupplierLedger(supplierId: string) {
+    if (!supplierId) return
+    try {
+      const res = await apiClient.get<SupplierPurchaseReturnLedgerRow[]>('/reports/supplier-purchase-return-ledger', {
+        params: { supplier_id: supplierId, start, end },
+      })
+      setSupplierLedger(res.data)
+    } catch (err) {
+      setError(apiErrorMessage(err))
+    }
+  }
+
+  useEffect(() => {
+    if (activeTab === 'supplier-purchase-returns' && selectedSupplierId) {
+      setSupplierLedger([])
+      loadSupplierLedger(selectedSupplierId)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedSupplierId, activeTab])
 
   const tab = TABS.find((t) => t.key === activeTab)!
 
@@ -384,11 +429,59 @@ export default function ReportsPage() {
           </div>
         </div>
       )}
+
+      {activeTab === 'supplier-purchase-returns' && (
+        <div className="space-y-6">
+          <Table
+            columns={['Supplier', 'GRNs', 'Purchases', 'Returns', 'Return Notes', 'Net (after returns)']}
+            rows={supplierPurchaseReturns.map((r) => [
+              r.supplier_name,
+              r.purchase_count.toString(),
+              inr(r.purchase_value),
+              r.return_count.toString(),
+              inr(r.return_value),
+              <span key={r.supplier_id} className={r.net_value >= 0 ? 'text-emerald-600' : 'text-red-600'}>
+                {inr(r.net_value)}
+              </span>,
+            ])}
+            emptyText="No purchase or return activity in this period."
+          />
+
+          <div className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-800">
+            <label className="mb-3 block text-sm font-medium text-slate-700 dark:text-slate-300">
+              Date-wise breakdown for
+              <select
+                value={selectedSupplierId}
+                onChange={(e) => setSelectedSupplierId(e.target.value)}
+                className="mt-1 block w-full max-w-xs rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+              >
+                {suppliers.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <Table
+              columns={['Date', 'Purchases', 'Returns', 'Net']}
+              rows={supplierLedger.map((r) => [
+                formatDate(r.date),
+                inr(r.purchase_value),
+                inr(r.return_value),
+                <span key={r.date} className={r.net_value >= 0 ? 'text-emerald-600' : 'text-red-600'}>
+                  {inr(r.net_value)}
+                </span>,
+              ])}
+              emptyText="No activity for this supplier in the period."
+            />
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
-function Table({ columns, rows, emptyText }: { columns: string[]; rows: string[][]; emptyText: string }) {
+function Table({ columns, rows, emptyText }: { columns: string[]; rows: React.ReactNode[][]; emptyText: string }) {
   return (
     <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800">
       <table className="w-full text-left text-sm">

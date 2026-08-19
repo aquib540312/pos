@@ -21,6 +21,8 @@ from app.modules.reports.schemas import (
     StockLedgerRow,
     StockSummaryRow,
     StockValuationRow,
+    SupplierPurchaseReturnLedgerRow,
+    SupplierPurchaseReturnRow,
     TopProductRow,
 )
 from app.modules.reports.service import ReportService
@@ -137,3 +139,24 @@ def sales_by_cashier(
     user: User = Depends(require_permission(Perm.REPORTS_VIEW)),
 ):
     return ReportService(db).sales_by_cashier(user.organization_id, start, end)
+
+
+@router.get("/supplier-purchase-returns", response_model=list[SupplierPurchaseReturnRow])
+def supplier_purchase_returns(
+    start: date = Query(...),
+    end: date = Query(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission(Perm.REPORTS_VIEW)),
+):
+    return ReportService(db).supplier_purchase_returns(user.organization_id, start, end)
+
+
+@router.get("/supplier-purchase-return-ledger", response_model=list[SupplierPurchaseReturnLedgerRow])
+def supplier_purchase_return_ledger(
+    supplier_id: uuid.UUID = Query(...),
+    start: date = Query(...),
+    end: date = Query(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission(Perm.REPORTS_VIEW)),
+):
+    return ReportService(db).supplier_purchase_return_ledger(user.organization_id, supplier_id, start, end)

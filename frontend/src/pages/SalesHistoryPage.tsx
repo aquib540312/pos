@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { apiClient, apiErrorMessage } from '../api/client'
+import { useCan, PERMS } from '../auth/permissions'
 import type { SaleInvoice, SalesReturn } from '../types'
 
 export default function SalesHistoryPage() {
@@ -10,6 +11,7 @@ export default function SalesHistoryPage() {
   const [search, setSearch] = useState('')
   const [selectedInvoice, setSelectedInvoice] = useState<SaleInvoice | null>(null)
   const [cancelling, setCancelling] = useState<string | null>(null)
+  const canReturn = useCan(PERMS.SALES_RETURN)
 
   async function loadInvoices() {
     try {
@@ -132,7 +134,7 @@ export default function SalesHistoryPage() {
                       <button onClick={() => setSelectedInvoice(inv)} className="text-indigo-600 hover:underline dark:text-indigo-400">
                         View
                       </button>
-                      {inv.status === 'posted' && (
+                      {canReturn && inv.status === 'posted' && (
                         <button
                           onClick={() => handleCancel(inv.id)}
                           disabled={cancelling === inv.id}
@@ -229,7 +231,7 @@ export default function SalesHistoryPage() {
               <button onClick={() => setSelectedInvoice(null)} className="rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 dark:bg-slate-700 dark:text-slate-200">
                 Close
               </button>
-              {selectedInvoice.status === 'posted' && (
+              {canReturn && selectedInvoice.status === 'posted' && (
                 <button onClick={() => handleCancel(selectedInvoice.id)} className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-500">
                   Cancel Invoice
                 </button>

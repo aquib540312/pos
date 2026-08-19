@@ -22,6 +22,23 @@ class EscposPrinter(Protocol):
 
 
 def render_receipt(printer: EscposPrinter, invoice: dict) -> None:
+    business = invoice.get("business")
+    if business:
+        business_name = business.get("trade_name") or business.get("legal_name")
+        if business_name:
+            printer.set(align="center", bold=True, width=2, height=2)
+            for line in _split_long_line(business_name):
+                printer.text(f"{line}\n")
+            printer.set(align="center", bold=False, width=1, height=1)
+        if business.get("address"):
+            for line in _split_long_line(business["address"]):
+                printer.text(f"{line}\n")
+        if business.get("phone"):
+            printer.text(f"Tel: {business['phone'][:32]}\n")
+        if business.get("gstin"):
+            printer.text(f"GSTIN: {business['gstin'][:32]}\n")
+        printer.text("-" * 32 + "\n")
+
     printer.set(align="center", bold=True, width=2, height=2)
     printer.text("TAX INVOICE\n")
     printer.set(align="center", bold=False, width=1, height=1)
@@ -56,8 +73,35 @@ def render_receipt(printer: EscposPrinter, invoice: dict) -> None:
         _line(printer, payment["method"].upper(), payment["amount"])
 
     printer.set(align="center")
-    printer.text("\nThank you for shopping with us!\n\n")
+    footer_note = invoice.get("footer_note")
+    printer.text("\n")
+    if footer_note:
+        for line in _split_long_line(footer_note):
+            printer.text(f"{line}\n")
+    if not footer_note or invoice.get("thanks_message", True):
+        printer.text("Thank you for shopping with us!\n\n")
+    else:
+        printer.text("\n")
     printer.cut()
+
+
+def _split_long_line(text: str, width: int = 32) -> list[str]:
+    """Wraps a line to the receipt width without breaking words mid-way."""
+    words = text.split()
+    lines: list[str] = []
+    current = ""
+    for word in words:
+        if len(current) + len(word) + 1 <= width:
+            current = f"{current} {word}".strip() if current else word
+            continue
+        if current:
+            lines.append(current)
+        current = word
+    if current:
+        lines.append(current)
+    if not lines:
+        return [""]
+    return lines
 
 
 def _line(printer: EscposPrinter, label: str, amount: float) -> None:

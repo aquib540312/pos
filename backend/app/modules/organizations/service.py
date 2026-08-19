@@ -4,13 +4,35 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
-from app.models.organization import Branch, Warehouse
+from app.models.organization import Branch, Organization, Warehouse
 from app.modules.subscriptions.repository import SubscriptionRepository
 
 
 class OrganizationService:
     def __init__(self, db: Session):
         self.db = db
+
+    def get_org_or_404(self, organization_id: uuid.UUID) -> Organization:
+        org = self.db.get(Organization, organization_id)
+        if org is None:
+            raise NotFoundError(f"Organization {organization_id} not found")
+        return org
+
+    def update_profile(self, organization_id: uuid.UUID, updates: dict) -> Organization:
+        """Partial profile update. Only keys present in `updates` are written;
+        an empty-string value clears a nullable branding field (logo can only
+        be set via the upload endpoint, never through this one). Gastin/sync
+        of the organization is the tenant's own identity -- bumping it here is
+        allowed but must be unique."""
+        org = self.get_org_or_404(organization_id)
+        for field in ("legal_name", "trade_name", "default_state_code"):
+            if field in updates:
+                setattr(org, field, updates[field])
+        for field in ("gstin", "pan", "phone", "address", "footer_note"):
+            if field in updates:
+                setattr(org, field, updates[field] or None)
+        self.db.flush()
+        return org
 
     def _enforce_branch_limit(self, organization_id: uuid.UUID) -> None:
         """No-op for orgs without a Subscription row (legacy/seeded/test

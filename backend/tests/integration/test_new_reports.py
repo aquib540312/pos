@@ -1,6 +1,8 @@
 import datetime as dt
 import uuid
 
+from app.core.timezones import ist_today
+
 
 def _receive_stock(client, seeded_org, quantity=100, unit_cost=30):
     supplier_resp = client.post(
@@ -35,7 +37,7 @@ def _sell(client, seeded_org, quantity, amount, method="cash", shift_id=None):
 
 
 def _today_range():
-    today = dt.date.today().isoformat()
+    today = ist_today().isoformat()
     return today, today
 
 
@@ -125,3 +127,106 @@ def test_sales_by_cashier_excludes_invoices_without_a_shift(client, seeded_org):
     )
     assert resp.status_code == 200
     assert resp.json() == []
+
+
+def test_supplier_purchase_returns_lists_buy_and_return_side_by_side(client, seeded_org):
+    headers = seeded_org["auth_headers"]
+
+    def _create_supplier(name):
+        resp = client.post("/api/v1/party/suppliers", headers=headers, json={"name": name})
+        assert resp.status_code == 201
+        return resp.json()["id"]
+
+    def _grn(supplier_id, quantity, unit_cost):
+        resp = client.post(
+            "/api/v1/purchasing/goods-receipts",
+            headers=headers,
+            json={
+                "warehouse_id": str(seeded_org["warehouse"].id),
+                "supplier_id": supplier_id,
+                "items": [{"product_id": str(seeded_org["product"].id), "quantity": quantity, "unit_cost": unit_cost}],
+            },
+        )
+        assert resp.status_code == 201, resp.text
+        return resp.json()
+
+    supplier_a = _create_supplier("Supplier A Buy")
+    supplier_b = _create_supplier("Supplier B Buy")
+    grn_a = _grn(supplier_a, quantity=10, unit_cost=30)  # 10*30 - 0 = 300
+    _grn(supplier_b, quantity=5, unit_cost=20)  # 100
+
+    # Return 2 units of supplier A's receipt linked to its GRN line.
+    return_resp = client.post(
+        "/api/v1/purchasing/purchase-returns",
+        headers=headers,
+        json={
+            "warehouse_id": str(seeded_org["warehouse"].id),
+            "supplier_id": supplier_a,
+            "goods_receipt_id": grn_a["id"],
+            "reason": "damaged in transit",
+            "items": [
+                {
+                    "product_id": str(seeded_org["product"].id),
+                    "quantity": 2,
+                    "unit_cost": 30,
+                    "original_grn_item_id": grn_a["items"][0]["id"],
+                }
+            ],
+        },
+    )
+    assert return_resp.status_code == 201, return_resp.text
+    return_total = return_resp.json()["return_total"]
+
+    start, end = _today_range()
+    resp = client.get(
+        "/api/v1/reports/supplier-purchase-returns",
+        headers=headers,
+        params={"start": start, "end": end},
+    )
+    assert resp.status_code == 200, resp.text
+    by_name = {row["supplier_name"]: row for row in resp.json()}
+
+    a = by_name["Supplier A Buy"]
+    assert a["purchase_count"] == 1
+    assert a["purchase_value"] == 300.0
+    assert a["return_count"] == 1
+    assert a["return_value"] == return_total
+    assert a["net_value"] == 300.0 - return_total
+
+    b = by_name["Supplier B Buy"]
+    assert b["purchase_value"] == 100.0
+    assert b["return_count"] == 0
+    assert b["return_value"] == 0.0
+    assert b["net_value"] == 100.0
+
+
+def test_supplier_purchase_return_ledger_is_daily_and_continuous(client, seeded_org):
+    headers = seeded_org["auth_headers"]
+    supplier_resp = client.post("/api/v1/party/suppliers", headers=headers, json={"name": "Ledger Supplier"})
+    supplier_id = supplier_resp.json()["id"]
+
+    grn_resp = client.post(
+        "/api/v1/purchasing/goods-receipts",
+        headers=headers,
+        json={
+            "warehouse_id": str(seeded_org["warehouse"].id),
+            "supplier_id": supplier_id,
+            "items": [{"product_id": str(seeded_org["product"].id), "quantity": 7, "unit_cost": 40}],
+        },
+    )
+    assert grn_resp.status_code == 201, grn_resp.text
+
+    today = ist_today()
+    start = (today - dt.timedelta(days=5)).isoformat()
+    end = today.isoformat()
+    resp = client.get(
+        "/api/v1/reports/supplier-purchase-return-ledger",
+        headers=headers,
+        params={"supplier_id": supplier_id, "start": start, "end": end},
+    )
+    assert resp.status_code == 200, resp.text
+    rows = resp.json()
+    # Every calendar day in the range appears, so the ledger is continuous.
+    assert len(rows) == 6
+    assert sum(r["purchase_value"] for r in rows) == 280.0  # 7*40
+    assert sum(r["return_value"] for r in rows) == 0.0

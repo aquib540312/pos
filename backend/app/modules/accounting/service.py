@@ -117,7 +117,7 @@ class AccountingService:
             debits["4900"] += -float(invoice.round_off)
 
         return self._post_entry(
-            invoice.organization_id, invoice.invoice_date.date(), "sales_invoice", invoice.id,
+            invoice.organization_id, invoice.business_date, "sales_invoice", invoice.id,
             f"Sale {invoice.invoice_number}", dict(debits), dict(credits),
         )
 

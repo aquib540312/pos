@@ -9,6 +9,7 @@ from app.modules.audit.api import router as audit_router
 from app.modules.auth.api import router as auth_router
 from app.modules.billing.api import router as billing_router
 from app.modules.catalog.api import router as catalog_router
+from app.modules.dining.api import router as dining_router
 from app.modules.gst_filing.api import router as gst_filing_router
 from app.modules.inventory.api import router as inventory_router
 from app.modules.loyalty.api import router as loyalty_router
@@ -54,6 +55,7 @@ for router in (
     purchasing_router,
     sales_router,
     billing_router,
+    dining_router,
     reports_router,
     loyalty_router,
     notifications_router,

@@ -152,6 +152,7 @@ def create_purchase_return(
             branch_id=warehouse.branch_id,
             warehouse_id=payload.warehouse_id,
             supplier_id=payload.supplier_id,
+            goods_receipt_id=payload.goods_receipt_id,
             reason=payload.reason,
             items=[i.model_dump() for i in payload.items],
         )

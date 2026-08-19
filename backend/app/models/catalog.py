@@ -64,6 +64,20 @@ class TaxRate(Base, UUIDPKMixin):
 
 
 class Product(Base, UUIDPKMixin, TimestampMixin):
+    """A billable item. Beyond the core tax/stock mechanics this carries the
+    fields a *universal* POS (grocery, medical, electronics, garment) needs
+    at the till:
+    - `brand` / `image_path`: quick visual recognition on the billing screen.
+    - `is_weighted`: sold by weight (KG/g), not by integer count.
+    - `loyalty_exempt`: excluded from loyalty-point accrual (e.g. tobacco).
+    - `prices_gst_inclusive`: MRP/sale price entered inclusive of GST (the
+      common retail convention in India); the effective GST-exclusive price
+      is derived from the HSN's rate and stored in `sale_price`.
+    - `wholesale_price`: B2B tier used by quotation/wholesale flows.
+    - `low_stock_notify`: whether the low-stock reorder alert applies.
+    - `parent_product_id` + `variant_label`: garment/electronics variants
+      (a size/colour line item sharing this product's HSN/UOM)."""
+
     __tablename__ = "products"
     __table_args__ = (
         UniqueConstraint("organization_id", "sku", name="uq_product_org_sku"),
@@ -78,25 +92,55 @@ class Product(Base, UUIDPKMixin, TimestampMixin):
     sku: Mapped[str] = mapped_column(String(64), nullable=False)
     barcode: Mapped[str | None] = mapped_column(String(64))
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    brand: Mapped[str | None] = mapped_column(String(120))
     description: Mapped[str | None] = mapped_column(String(1000))
+    image_path: Mapped[str | None] = mapped_column(String(255))
 
     mrp: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
     sale_price: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
+    wholesale_price: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
     purchase_price: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
 
     tracks_batches: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     tracks_serials: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     tracks_expiry: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_weighted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     reorder_level: Mapped[float] = mapped_column(Numeric(12, 3, asdecimal=False), nullable=False, default=0)
+    low_stock_notify: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_combo: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
+    loyalty_exempt: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    prices_gst_inclusive: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    parent_product_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("products.id"), nullable=True)
+    variant_label: Mapped[str | None] = mapped_column(String(80))
+
     hsn_code: Mapped["HSNCode | None"] = relationship()
     uom: Mapped["UnitOfMeasure"] = relationship()
+    category: Mapped["Category | None"] = relationship()
     combo_components: Mapped[list["ComboComponent"]] = relationship(
         foreign_keys="ComboComponent.combo_product_id", back_populates="combo_product"
     )
+    aliases: Mapped[list["ProductAlias"]] = relationship(
+        back_populates="product", cascade="all, delete-orphan", foreign_keys="ProductAlias.product_id"
+    )
+
+
+class ProductAlias(Base, UUIDPKMixin):
+    """Alternate search words for a product -- regional/popular names
+    ("atta" for flour, "mobile" for a phone) so a barcode-free cashier
+    search still finds the item fast at the till."""
+
+    __tablename__ = "product_aliases"
+    __table_args__ = (UniqueConstraint("organization_id", "alias", name="uq_product_alias_org_alias"),)
+
+    organization_id: Mapped[uuid.UUID] = org_fk()
+    product_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("products.id"), nullable=False, index=True)
+    alias: Mapped[str] = mapped_column(String(120), nullable=False)
+
+    product: Mapped["Product"] = relationship(back_populates="aliases")
 
 
 class ComboComponent(Base, UUIDPKMixin):

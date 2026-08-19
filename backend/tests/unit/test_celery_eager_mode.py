@@ -7,20 +7,29 @@ prove that flip actually works, not just that the config value is stored.
 """
 
 from app.celery_app import celery_app
-from app.core.config import Settings
+from app.core.config import Settings, get_settings
 from app.modules.notifications import tasks as notification_tasks
 from app.modules.printing import tasks as printing_tasks
 
 
 def test_default_settings_do_not_enable_eager_mode():
-    assert Settings().celery_task_always_eager is False
+    # `_env_file=None` keeps the dev-machine `.env` (which sets
+    # POS_CELERY_TASK_ALWAYS_EAGER=true for local run-without-worker setups)
+    # out of this assertion -- what's under test is the code default.
+    assert Settings(_env_file=None).celery_task_always_eager is False
 
 
 def test_celery_conf_defaults_to_non_eager_matching_settings():
     """The normal (docker-compose, a real worker present) case: dispatch
-    stays decoupled from the request unless explicitly overridden."""
-    assert celery_app.conf.task_always_eager is False
-    assert celery_app.conf.task_eager_propagates is False
+    stays decoupled from the request unless explicitly overridden. Compare
+    celery to the settings that provisioned it (rather than hard-coding
+    False) so a dev machine whose .env deliberately enables eager mode for
+    its worker-less setup -- which is legitimate, just different -- doesn't
+    turn this into a false failure; TestSettings() asserts the code default
+    is non-eager, and every deploy that doesn't override stays non-eager."""
+    assert Settings(_env_file=None).celery_task_always_eager is False  # deploy default
+    assert celery_app.conf.task_always_eager is get_settings().celery_task_always_eager
+    assert celery_app.conf.task_eager_propagates is get_settings().celery_task_always_eager
 
 
 def test_eager_mode_runs_notification_task_synchronously(monkeypatch):

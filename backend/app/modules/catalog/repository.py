@@ -3,10 +3,10 @@ from __future__ import annotations
 import uuid
 from datetime import date
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, exists, or_, select
 from sqlalchemy.orm import Session
 
-from app.models.catalog import Category, HSNCode, Product, TaxRate, UnitOfMeasure
+from app.models.catalog import Category, HSNCode, Product, ProductAlias, TaxRate, UnitOfMeasure
 
 
 class CategoryRepository:
@@ -92,11 +92,30 @@ class ProductRepository:
         stmt = select(Product).where(Product.organization_id == organization_id, Product.is_active.is_(True))
         if search:
             like = f"%{search}%"
-            stmt = stmt.where(or_(Product.name.ilike(like), Product.sku.ilike(like), Product.barcode.ilike(like)))
+            alias_match = exists().where(
+                ProductAlias.product_id == Product.id,
+                ProductAlias.organization_id == organization_id,
+                ProductAlias.alias.ilike(like),
+            )
+            stmt = stmt.where(
+                or_(
+                    Product.name.ilike(like),
+                    Product.sku.ilike(like),
+                    Product.barcode.ilike(like),
+                    Product.brand.ilike(like),
+                    alias_match,
+                )
+            )
         return list(self.db.execute(stmt.limit(limit)).scalars())
 
     def get(self, product_id: uuid.UUID) -> Product | None:
         return self.db.get(Product, product_id)
+
+    def list_by_ids(self, product_ids: list[uuid.UUID]) -> list[Product]:
+        if not product_ids:
+            return []
+        stmt = select(Product).where(Product.id.in_(product_ids))
+        return list(self.db.execute(stmt).scalars())
 
     def get_by_barcode(self, organization_id: uuid.UUID, barcode: str) -> Product | None:
         stmt = select(Product).where(
@@ -106,6 +125,17 @@ class ProductRepository:
 
     def get_by_sku(self, organization_id: uuid.UUID, sku: str) -> Product | None:
         stmt = select(Product).where(Product.organization_id == organization_id, Product.sku == sku)
+        return self.db.execute(stmt).scalars().first()
+
+    def get_by_alias(
+        self, organization_id: uuid.UUID, alias: str, *, exclude_product_id: uuid.UUID | None = None
+    ) -> Product | None:
+        stmt = select(Product).join(ProductAlias, ProductAlias.product_id == Product.id).where(
+            Product.organization_id == organization_id,
+            ProductAlias.alias == alias,
+        )
+        if exclude_product_id is not None:
+            stmt = stmt.where(Product.id != exclude_product_id)
         return self.db.execute(stmt).scalars().first()
 
     def add(self, product: Product) -> Product:

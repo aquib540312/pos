@@ -19,6 +19,14 @@ class Organization(Base, UUIDPKMixin, TimestampMixin):
     default_state_code: Mapped[str] = mapped_column(String(2), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
+    # Business branding used on receipts/invoices: logo file name under the
+    # uploads dir (served via GET /org/logo.png), contact details and an
+    # optional footer line printed under the totals.
+    logo_path: Mapped[str | None] = mapped_column(String(255))
+    phone: Mapped[str | None] = mapped_column(String(20))
+    address: Mapped[str | None] = mapped_column(String(500))
+    footer_note: Mapped[str | None] = mapped_column(String(200))
+
     branches: Mapped[list["Branch"]] = relationship(back_populates="organization")
 
 

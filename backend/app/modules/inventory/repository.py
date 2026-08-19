@@ -12,6 +12,20 @@ class StockRepository:
     def __init__(self, db: Session):
         self.db = db
 
+    def get_stock_item_for_update(
+        self, warehouse_id: uuid.UUID, product_id: uuid.UUID, batch_id: uuid.UUID | None
+    ) -> StockItem | None:
+        stmt = (
+            select(StockItem)
+            .where(
+                StockItem.warehouse_id == warehouse_id,
+                StockItem.product_id == product_id,
+                StockItem.batch_id == batch_id,
+            )
+            .with_for_update()
+        )
+        return self.db.execute(stmt).scalars().first()
+
     def get_stock_item(
         self, warehouse_id: uuid.UUID, product_id: uuid.UUID, batch_id: uuid.UUID | None
     ) -> StockItem | None:
@@ -25,7 +39,7 @@ class StockRepository:
     def get_or_create_stock_item(
         self, organization_id: uuid.UUID, warehouse_id: uuid.UUID, product_id: uuid.UUID, batch_id: uuid.UUID | None
     ) -> StockItem:
-        item = self.get_stock_item(warehouse_id, product_id, batch_id)
+        item = self.get_stock_item_for_update(warehouse_id, product_id, batch_id)
         if item is None:
             item = StockItem(
                 organization_id=organization_id,
@@ -57,6 +71,7 @@ class StockRepository:
                 StockItem.quantity_on_hand > 0,
             )
             .order_by(ProductBatch.expiry_date.is_(None), ProductBatch.expiry_date.asc(), ProductBatch.created_at.asc())
+            .with_for_update()
         )
         return list(self.db.execute(stmt).scalars())
 

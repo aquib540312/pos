@@ -32,6 +32,9 @@ class PurchaseOrderItem(Base, UUIDPKMixin):
     quantity_ordered: Mapped[float] = mapped_column(Numeric(14, 3, asdecimal=False), nullable=False)
     quantity_received: Mapped[float] = mapped_column(Numeric(14, 3, asdecimal=False), nullable=False, default=0)
     unit_cost: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False)
+    # Per-line discount off the gross line value (qty * unit_cost), agreed
+    # with the supplier on the PO. Mirrored onto the GRN line at receipt.
+    discount_amount: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
 
     purchase_order: Mapped["PurchaseOrder"] = relationship(back_populates="items")
 
@@ -73,6 +76,11 @@ class GoodsReceiptItem(Base, UUIDPKMixin):
     # linked PO's fulfillment; see PurchasingService.receive_goods.
     free_quantity: Mapped[float] = mapped_column(Numeric(14, 3, asdecimal=False), nullable=False, default=0)
     unit_cost: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False)
+    # Per-line discount off the gross received value (quantity * unit_cost),
+    # e.g. a supplier invoice discount. Reduces the taxable value of the
+    # line (and thus the input GST claimed) exactly like a sale-line
+    # discount does on the sales side.
+    discount_amount: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
     # Purchase-side GST captured at receipt time so Input CGST/SGST/IGST
     # credit can be claimed in accounting (previously deferred -- see
     # accounting/service.py). Snapshot per line, mirroring how sale lines

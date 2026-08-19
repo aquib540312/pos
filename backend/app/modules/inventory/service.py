@@ -141,7 +141,7 @@ class StockTransferService:
 
         transfer = StockTransfer(
             organization_id=organization_id,
-            transfer_number=next_document_number(self.db, StockTransfer, "TRF"),
+            transfer_number=next_document_number(self.db, StockTransfer, "TRF", organization_id),
             source_warehouse_id=source_warehouse_id,
             destination_warehouse_id=destination_warehouse_id,
             status="draft",

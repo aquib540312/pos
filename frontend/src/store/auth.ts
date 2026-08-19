@@ -4,6 +4,9 @@ export interface AuthUser {
   id: string
   full_name: string
   email: string
+  role_ids: string[]
+  role_names: string[]
+  permissions: string[]
 }
 
 interface AuthState {

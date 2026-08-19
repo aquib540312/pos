@@ -8,3 +8,57 @@ body {
   margin: 0;
   font-family: system-ui, "Segoe UI", Roboto, sans-serif;
 }
+
+/* Print a single document (PO / GRN / return / quotation) without the
+   rest of the app. The modal shell gets body#printing-purchase set just
+   before window.print(); everything else is hidden, only #print-doc
+   survives on paper. */
+@media print {
+  body.printing-purchase * {
+    visibility: hidden;
+  }
+  body.printing-purchase #print-doc,
+  body.printing-purchase #print-doc * {
+    visibility: visible;
+  }
+  body.printing-purchase #print-doc {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    max-height: none;
+    overflow: visible;
+    margin: 0;
+    padding: 24pt;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    color: #000;
+    background: #fff;
+  }
+}
+
+/* Restaurant kitchen order tickets: same trick as #print-doc above, for
+   the KOT card rendered inside the Restaurant page. */
+@media print {
+  body.printing-kot * {
+    visibility: hidden;
+  }
+  body.printing-kot #print-kot,
+  body.printing-kot #print-kot * {
+    visibility: visible;
+  }
+  body.printing-kot #print-kot {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 72mm;
+    padding: 8pt;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    color: #000;
+    background: #fff;
+    font-family: 'Courier New', Courier, monospace;
+  }
+}

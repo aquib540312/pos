@@ -1,15 +1,17 @@
 import uuid
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import date, timedelta
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.timezones import as_ist_day, ist_day_bounds_utc, ist_range_bounds_utc, ist_today
 from app.models.accounting import JournalEntry, JournalLine, LedgerAccount
 from app.models.billing import Payment, Shift
 from app.models.catalog import HSNCode, Product, ProductBatch, UnitOfMeasure
 from app.models.inventory import StockItem, StockLedgerEntry
 from app.models.organization import Warehouse
-from app.models.party import Customer
+from app.models.party import Customer, Supplier
+from app.models.purchasing import GoodsReceipt, GoodsReceiptItem, PurchaseReturn
 from app.models.rbac import User
 from app.models.sales import SalesInvoice, SalesInvoiceItem
 from app.models.sync import SyncConflict
@@ -29,6 +31,8 @@ from app.modules.reports.schemas import (
     StockLedgerRow,
     StockSummaryRow,
     StockValuationRow,
+    SupplierPurchaseReturnLedgerRow,
+    SupplierPurchaseReturnRow,
     TopProductRow,
 )
 
@@ -38,8 +42,7 @@ class ReportService:
         self.db = db
 
     def sales_summary(self, organization_id: uuid.UUID, start: date, end: date) -> SalesSummaryResponse:
-        start_dt = datetime.combine(start, time.min, tzinfo=timezone.utc)
-        end_dt = datetime.combine(end, time.max, tzinfo=timezone.utc)
+        start_dt, end_dt = ist_range_bounds_utc(start, end)
         stmt = select(
             func.count(SalesInvoice.id),
             func.coalesce(func.sum(SalesInvoice.taxable_total), 0),
@@ -100,8 +103,7 @@ class ReportService:
         expects it: by HSN code + effective rate. This is the data, not the
         government JSON/upload format -- see ROADMAP.md for the GSP filing
         integration that would consume this."""
-        start_dt = datetime.combine(start, time.min, tzinfo=timezone.utc)
-        end_dt = datetime.combine(end, time.max, tzinfo=timezone.utc)
+        start_dt, end_dt = ist_range_bounds_utc(start, end)
         stmt = (
             select(
                 HSNCode.code,
@@ -142,8 +144,7 @@ class ReportService:
         vs inter-state, and rate. Only sales with no buyer GSTIN captured
         (walk-in/unregistered consumers) belong here -- registered-buyer
         sales are reported invoice-wise instead, see `gstr1_b2b_summary`."""
-        start_dt = datetime.combine(start, time.min, tzinfo=timezone.utc)
-        end_dt = datetime.combine(end, time.max, tzinfo=timezone.utc)
+        start_dt, end_dt = ist_range_bounds_utc(start, end)
         stmt = (
             select(
                 SalesInvoice.place_of_supply_state_code,
@@ -184,14 +185,13 @@ class ReportService:
         GSTIN captured at posting time, one entry per invoice with a
         rate-item per distinct tax rate on that invoice (an invoice can
         mix rates, e.g. 5% and 18% products in the same cart)."""
-        start_dt = datetime.combine(start, time.min, tzinfo=timezone.utc)
-        end_dt = datetime.combine(end, time.max, tzinfo=timezone.utc)
+        start_dt, end_dt = ist_range_bounds_utc(start, end)
         stmt = (
             select(
                 SalesInvoice.id,
                 SalesInvoice.customer_gstin,
                 SalesInvoice.invoice_number,
-                SalesInvoice.invoice_date,
+                SalesInvoice.business_date,
                 SalesInvoice.grand_total,
                 SalesInvoice.place_of_supply_state_code,
                 SalesInvoice.is_inter_state,
@@ -214,7 +214,7 @@ class ReportService:
                 SalesInvoice.id,
                 SalesInvoice.customer_gstin,
                 SalesInvoice.invoice_number,
-                SalesInvoice.invoice_date,
+                SalesInvoice.business_date,
                 SalesInvoice.grand_total,
                 SalesInvoice.place_of_supply_state_code,
                 SalesInvoice.is_inter_state,
@@ -251,8 +251,7 @@ class ReportService:
         return list(invoices.values())
 
     def gross_turnover(self, organization_id: uuid.UUID, start: date, end: date) -> float:
-        start_dt = datetime.combine(start, time.min, tzinfo=timezone.utc)
-        end_dt = datetime.combine(end, time.max, tzinfo=timezone.utc)
+        start_dt, end_dt = ist_range_bounds_utc(start, end)
         stmt = select(func.coalesce(func.sum(SalesInvoice.grand_total), 0)).where(
             SalesInvoice.organization_id == organization_id,
             SalesInvoice.status == "posted",
@@ -363,8 +362,7 @@ class ReportService:
         )
 
     def top_products(self, organization_id: uuid.UUID, start: date, end: date, limit: int = 10) -> list[TopProductRow]:
-        start_dt = datetime.combine(start, time.min, tzinfo=timezone.utc)
-        end_dt = datetime.combine(end, time.max, tzinfo=timezone.utc)
+        start_dt, end_dt = ist_range_bounds_utc(start, end)
         stmt = (
             select(
                 Product.id,
@@ -393,8 +391,7 @@ class ReportService:
     def payment_method_breakdown(
         self, organization_id: uuid.UUID, start: date, end: date
     ) -> list[PaymentMethodBreakdownRow]:
-        start_dt = datetime.combine(start, time.min, tzinfo=timezone.utc)
-        end_dt = datetime.combine(end, time.max, tzinfo=timezone.utc)
+        start_dt, end_dt = ist_range_bounds_utc(start, end)
         stmt = (
             select(Payment.method, func.count(Payment.id), func.coalesce(func.sum(Payment.amount), 0))
             .join(SalesInvoice, SalesInvoice.id == Payment.invoice_id)
@@ -417,8 +414,7 @@ class ReportService:
         cashier -- a shift-less invoice (e.g. posted outside till
         operations) has no cashier to credit it to, so it's excluded here
         rather than lumped under some placeholder."""
-        start_dt = datetime.combine(start, time.min, tzinfo=timezone.utc)
-        end_dt = datetime.combine(end, time.max, tzinfo=timezone.utc)
+        start_dt, end_dt = ist_range_bounds_utc(start, end)
         stmt = (
             select(
                 User.id,
@@ -445,7 +441,7 @@ class ReportService:
     def expiring_stock(self, organization_id: uuid.UUID, within_days: int) -> list[ExpiringStockRow]:
         """Batches whose expiry is <= `within_days` from today (or already
         expired), with positive on-hand quantity at some warehouse."""
-        cutoff = date.today() + timedelta(days=within_days)
+        cutoff = ist_today() + timedelta(days=within_days)
         stmt = (
             select(
                 Product.id,
@@ -471,7 +467,7 @@ class ReportService:
         )
         rows = []
         for pid, name, sku, wh_id, wh_name, batch_id, batch_number, qty, expiry in self.db.execute(stmt).all():
-            days = (expiry - date.today()).days if expiry else None
+            days = (expiry - ist_today()).days if expiry else None
             rows.append(
                 ExpiringStockRow(
                     product_id=pid, product_name=name, sku=sku, warehouse_id=wh_id, warehouse_name=wh_name,
@@ -567,9 +563,8 @@ class ReportService:
         """The numbers a till manager wants at a glance: today's sales,
         low-stock and expiring-stock counts, open shifts, and outstanding
         customer credit."""
-        today = date.today()
-        start_dt = datetime.combine(today, time.min, tzinfo=timezone.utc)
-        end_dt = datetime.combine(today, time.max, tzinfo=timezone.utc)
+        today = ist_today()
+        start_dt, end_dt = ist_day_bounds_utc(today)
 
         stmt = select(
             func.count(SalesInvoice.id),
@@ -645,3 +640,133 @@ class ReportService:
             )
         except Exception:  # pragma: no cover - alert sync must never break the dashboard
             pass
+
+    def supplier_purchase_returns(self, organization_id: uuid.UUID, start: date, end: date) -> list[SupplierPurchaseReturnRow]:
+        """Per-supplier net of goods received vs returned in a date range.
+        "Purchases" = GRN line value (paid qty x unit cost minus line
+        discount); "returns" = purchase return totals. Every org supplier is
+        listed so a supplier with no activity in the window shows zeros."""
+        start_dt, end_dt = ist_range_bounds_utc(start, end)
+
+        purchase_stmt = (
+            select(
+                GoodsReceipt.supplier_id,
+                func.count(func.distinct(GoodsReceipt.id)),
+                func.coalesce(
+                    func.sum(
+                        (GoodsReceiptItem.quantity - GoodsReceiptItem.free_quantity) * GoodsReceiptItem.unit_cost
+                        - GoodsReceiptItem.discount_amount
+                    ),
+                    0,
+                ),
+            )
+            .join(GoodsReceiptItem, GoodsReceiptItem.goods_receipt_id == GoodsReceipt.id)
+            .where(
+                GoodsReceipt.organization_id == organization_id,
+                GoodsReceipt.received_at >= start_dt,
+                GoodsReceipt.received_at <= end_dt,
+            )
+            .group_by(GoodsReceipt.supplier_id)
+        )
+
+        return_stmt = (
+            select(
+                PurchaseReturn.supplier_id,
+                func.count(func.distinct(PurchaseReturn.id)),
+                func.coalesce(func.sum(PurchaseReturn.return_total), 0),
+            )
+            .where(
+                PurchaseReturn.organization_id == organization_id,
+                PurchaseReturn.return_date >= start_dt,
+                PurchaseReturn.return_date <= end_dt,
+            )
+            .group_by(PurchaseReturn.supplier_id)
+        )
+
+        purchases = {sid: (int(count), float(val)) for sid, count, val in self.db.execute(purchase_stmt).all()}
+        return_rows = {sid: (int(count), float(val)) for sid, count, val in self.db.execute(return_stmt).all()}
+
+        supplier_names = {
+            sid: name
+            for sid, name in self.db.execute(
+                select(Supplier.id, Supplier.name).where(
+                    Supplier.organization_id == organization_id, Supplier.is_active.is_(True)
+                )
+            ).all()
+        }
+
+        rows: list[SupplierPurchaseReturnRow] = []
+        for supplier_id, supplier_name in supplier_names.items():
+            purchase_count, purchase_value = purchases.get(supplier_id, (0, 0.0))
+            return_count, return_value = return_rows.get(supplier_id, (0, 0.0))
+            rows.append(
+                SupplierPurchaseReturnRow(
+                    supplier_id=supplier_id,
+                    supplier_name=supplier_name,
+                    purchase_count=purchase_count,
+                    purchase_value=purchase_value,
+                    return_count=return_count,
+                    return_value=return_value,
+                    net_value=purchase_value - return_value,
+                )
+            )
+
+        rows.sort(key=lambda r: r.supplier_name.lower())
+        return rows
+
+    def supplier_purchase_return_ledger(
+        self, organization_id: uuid.UUID, supplier_id: uuid.UUID, start: date, end: date
+    ) -> list[SupplierPurchaseReturnLedgerRow]:
+        """Day-by-day buys vs returns for one supplier, bucketed in Python so
+        the tz-aware datetimes collapse to calendar dates identically on
+        SQLite (dev) and Postgres (prod)."""
+        start_dt, end_dt = ist_range_bounds_utc(start, end)
+
+        daily_purchase_stmt = (
+            select(
+                GoodsReceipt.id,
+                GoodsReceipt.received_at,
+                func.coalesce(
+                    func.sum(
+                        (GoodsReceiptItem.quantity - GoodsReceiptItem.free_quantity) * GoodsReceiptItem.unit_cost
+                        - GoodsReceiptItem.discount_amount
+                    ),
+                    0,
+                ),
+            )
+            .join(GoodsReceiptItem, GoodsReceiptItem.goods_receipt_id == GoodsReceipt.id)
+            .where(
+                GoodsReceipt.organization_id == organization_id,
+                GoodsReceipt.supplier_id == supplier_id,
+                GoodsReceipt.received_at >= start_dt,
+                GoodsReceipt.received_at <= end_dt,
+            )
+            .group_by(GoodsReceipt.id, GoodsReceipt.received_at)
+        )
+
+        daily = {(start + timedelta(days=i)): [0.0, 0.0] for i in range((end - start).days + 1)}
+        for _, received_at, value in self.db.execute(daily_purchase_stmt):
+            day = as_ist_day(received_at)
+            if day in daily:
+                daily[day][0] += float(value)
+        for return_date, total in self.db.execute(
+            select(PurchaseReturn.return_date, PurchaseReturn.return_total).where(
+                PurchaseReturn.organization_id == organization_id,
+                PurchaseReturn.supplier_id == supplier_id,
+                PurchaseReturn.return_date >= start_dt,
+                PurchaseReturn.return_date <= end_dt,
+            )
+        ):
+            day = as_ist_day(return_date)
+            if day in daily:
+                daily[day][1] += float(total)
+
+        return [
+            SupplierPurchaseReturnLedgerRow(
+                date=day,
+                purchase_value=values[0],
+                return_value=values[1],
+                net_value=values[0] - values[1],
+            )
+            for day, values in sorted(daily.items())
+        ]

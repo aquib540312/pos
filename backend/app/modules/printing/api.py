@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.core.deps import require_permission
 from app.core.permissions import Perm
 from app.db.session import get_db
+from app.models.organization import Organization
 from app.models.rbac import User
 from app.modules.catalog.service import CatalogService
 from app.modules.printing.service import PrintService, invoice_to_print_payload
@@ -27,7 +28,18 @@ def _build_payload(db: Session, invoice_id: uuid.UUID) -> dict:
         if item.product_id not in product_names:
             product = catalog.products.get(item.product_id)
             product_names[item.product_id] = product.name if product else str(item.product_id)
-    return invoice_to_print_payload(invoice, product_names)
+    org = db.get(Organization, invoice.organization_id)
+    business = None
+    if org is not None:
+        business = {
+            "legal_name": org.legal_name,
+            "trade_name": org.trade_name,
+            "gstin": org.gstin,
+            "address": org.address,
+            "phone": org.phone,
+            "footer_note": org.footer_note,
+        }
+    return invoice_to_print_payload(invoice, product_names, business)
 
 
 @router.get("/receipt/{invoice_id}/escpos")

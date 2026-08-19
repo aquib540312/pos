@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { apiClient, apiErrorMessage } from '../api/client'
 import { useAuthStore } from '../store/auth'
+import { firstAllowedPath } from '../auth/nav'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('admin@demo.local')
@@ -24,10 +25,19 @@ export default function LoginPage() {
       })
       const token = tokenResp.data.access_token as string
       // Temporarily store token so the /auth/me call below is authenticated.
-      useAuthStore.getState().setSession(token, { id: '', full_name: '', email: '' })
+      useAuthStore.getState().setSession(token, {
+        id: '',
+        full_name: '',
+        email: '',
+        role_ids: [],
+        role_names: [],
+        permissions: [],
+      })
       const me = await apiClient.get('/auth/me')
       setSession(token, me.data)
-      navigate('/')
+      // Land on the first page this user is actually allowed to open (a
+      // cashier goes straight to POS, an admin to the dashboard).
+      navigate(firstAllowedPath(me.data))
     } catch (err) {
       setError(apiErrorMessage(err))
     } finally {

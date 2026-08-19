@@ -4,7 +4,8 @@ from datetime import date, timedelta
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
-from app.models.catalog import Category, ComboComponent, HSNCode, Product, TaxRate, UnitOfMeasure
+from app.models.catalog import Category, ComboComponent, HSNCode, Product, ProductAlias, TaxRate, UnitOfMeasure
+from app.models.organization import Warehouse
 from app.modules.catalog.bulk_import import (
     BulkImportResult,
     RowResult,
@@ -14,7 +15,9 @@ from app.modules.catalog.bulk_import import (
     require_number,
     require_str,
 )
+from app.modules.catalog.labels import InvalidLabelDataError, generate_ean13
 from app.modules.catalog.repository import CategoryRepository, HSNRepository, ProductRepository, UOMRepository
+from app.modules.inventory.service import InventoryService
 
 
 class CatalogService:
@@ -57,6 +60,38 @@ class CatalogService:
         rate = self.hsn.get_effective_tax_rate(hsn_code_id, date.today())
         return float(rate.rate_percent) if rate else None
 
+    def _assign_product_aliases(self, product: Product, aliases: list[str]) -> None:
+        """Replace the product's search aliases. Aliases are normalized
+        (stripped, deduped, casefolded) and rejected when they collide with
+        another product's SKU/barcode/alias in the same organization."""
+        for existing in product.aliases:
+            self.db.delete(existing)
+        product.aliases = []
+        seen: set[str] = set()
+        for raw in aliases:
+            alias = raw.strip()
+            if not alias:
+                continue
+            alias_key = alias.casefold()
+            if alias_key in seen:
+                continue
+            seen.add(alias_key)
+            if self.products.get_by_sku(organization_id := product.organization_id, alias) is not None:
+                raise ValidationError(f"Alias '{alias}' collides with an existing SKU")
+            if self.products.get_by_barcode(organization_id, alias) is not None:
+                raise ValidationError(f"Alias '{alias}' collides with an existing barcode")
+            if self.products.get_by_alias(organization_id, alias, exclude_product_id=product.id) is not None:
+                raise ValidationError(f"Alias '{alias}' is already used by another product")
+            self.db.add(ProductAlias(organization_id=organization_id, product_id=product.id, alias=alias))
+
+    def _derive_gst_exclusive_price(self, hsn_code_id: uuid.UUID | None, sale_price: float) -> float:
+        """Convert a GST-inclusive sale price to the GST-exclusive value that
+        is actually stored/billed, using the HSN's current effective rate."""
+        rate = self.hsn_current_rate(hsn_code_id) if hsn_code_id else None
+        if rate is None or rate <= 0:
+            return sale_price
+        return round(sale_price * 100 / (100 + rate), 2)
+
     def create_product(self, organization_id: uuid.UUID, **fields) -> Product:
         """A combo product bills as a single line at its own price/HSN --
         exactly like a normal product -- but has no stock of its own. See
@@ -74,8 +109,33 @@ class CatalogService:
         if not is_combo and combo_components:
             raise ValidationError("combo_components can only be set when is_combo is true")
 
+        aliases = fields.pop("aliases", []) or []
+        generate_barcode = fields.pop("generate_barcode", False)
+        if generate_barcode and not fields.get("barcode"):
+            base = f"890{str(uuid.uuid4().int)[:9]}"
+            try:
+                fields["barcode"] = generate_ean13(base)
+            except InvalidLabelDataError:  # pragma: no cover -- base is always 12 digits
+                pass
+
+        initial_stock_qty = fields.pop("initial_stock_qty", 0) or 0
+        warehouse_id = fields.pop("warehouse_id", None)
+        if fields.get("prices_gst_inclusive") and fields.get("sale_price"):
+            fields["sale_price"] = self._derive_gst_exclusive_price(fields.get("hsn_code_id"), fields["sale_price"])
+
+        parent_id = fields.get("parent_product_id")
+        if parent_id is not None:
+            parent = self.products.get(parent_id)
+            if parent is None:
+                raise NotFoundError(f"Parent product {parent_id} not found")
+            if parent.organization_id != organization_id:
+                raise NotFoundError(f"Parent product {parent_id} not found")
+            if not fields.get("variant_label"):
+                raise ValidationError("A variant product must have a variant_label (e.g. 'M', 'Red')")
+
         product = Product(organization_id=organization_id, **fields)
         self.products.add(product)
+        self._assign_product_aliases(product, aliases)
 
         for comp in combo_components:
             component = self.products.get(comp["component_product_id"])
@@ -90,6 +150,17 @@ class CatalogService:
                     quantity=comp["quantity"],
                 )
             )
+
+        if initial_stock_qty > 0:
+            warehouse = self.db.get(Warehouse, warehouse_id) if warehouse_id else None
+            if warehouse is None:
+                raise ValidationError("Opening stock requires a valid warehouse_id")
+            InventoryService(self.db).receive(
+                organization_id, warehouse.id, product.id, None, initial_stock_qty,
+                "adjustment_in", "product_create", product.id,
+                notes="Opening stock on product creation",
+            )
+
         self.db.flush()
         return product
 
@@ -118,8 +189,12 @@ class CatalogService:
         mrp = require_number(raw, "mrp")
         sale_price = require_number(raw, "sale_price")
         purchase_price = optional_number(raw, "purchase_price", default=0)
+        wholesale_price = optional_number(raw, "wholesale_price", default=0)
         reorder_level = optional_number(raw, "reorder_level", default=0)
-        for label, value in (("mrp", mrp), ("sale_price", sale_price), ("purchase_price", purchase_price), ("reorder_level", reorder_level)):
+        for label, value in (
+            ("mrp", mrp), ("sale_price", sale_price), ("purchase_price", purchase_price),
+            ("wholesale_price", wholesale_price), ("reorder_level", reorder_level),
+        ):
             if value < 0:
                 raise ValidationError(f"'{label}' cannot be negative")
 
@@ -142,32 +217,45 @@ class CatalogService:
                 category = self.create_category(organization_id, category_name, None)
             category_id = category.id
 
+        aliases = []
+        raw_aliases = optional_str(raw, "aliases")
+        if raw_aliases:
+            aliases = [a.strip() for a in raw_aliases.split(",") if a.strip()]
+
         fields = {
             "barcode": optional_str(raw, "barcode"),
             "name": name,
+            "brand": optional_str(raw, "brand"),
             "description": optional_str(raw, "description"),
             "category_id": category_id,
             "hsn_code_id": hsn.id if hsn else None,
             "uom_id": uom.id,
             "mrp": mrp,
             "sale_price": sale_price,
+            "wholesale_price": wholesale_price,
             "purchase_price": purchase_price,
             "reorder_level": reorder_level,
             "tracks_batches": optional_bool(raw, "tracks_batches", default=False),
             "tracks_serials": optional_bool(raw, "tracks_serials", default=False),
             "tracks_expiry": optional_bool(raw, "tracks_expiry", default=False),
+            "is_weighted": optional_bool(raw, "is_weighted", default=False),
+            "loyalty_exempt": optional_bool(raw, "loyalty_exempt", default=False),
         }
 
         existing = self.products.get_by_sku(organization_id, sku)
         if existing is not None:
             for key, value in fields.items():
                 setattr(existing, key, value)
+            if aliases:
+                self._assign_product_aliases(existing, aliases)
             self.db.flush()
             self.db.commit()
             return RowResult(row_number, "updated", sku)
 
         product = Product(organization_id=organization_id, sku=sku, **fields)
         self.products.add(product)
+        if aliases:
+            self._assign_product_aliases(product, aliases)
         self.db.commit()
         return RowResult(row_number, "created", sku)
 
@@ -200,13 +288,25 @@ class CatalogService:
             product.barcode = barcode
 
         for key in ("name", "description", "category_id", "hsn_code_id", "uom_id",
-                    "mrp", "sale_price", "purchase_price", "reorder_level", "is_active"):
+                    "mrp", "sale_price", "purchase_price", "reorder_level", "is_active",
+                    "brand", "wholesale_price", "low_stock_notify", "is_weighted",
+                    "loyalty_exempt", "prices_gst_inclusive", "parent_product_id", "variant_label"):
             if fields.get(key) is not None:
                 setattr(product, key, fields[key])
+
+        if fields.get("prices_gst_inclusive") and fields.get("sale_price") is not None:
+            product.sale_price = self._derive_gst_exclusive_price(product.hsn_code_id, product.sale_price)
+        if "aliases" in fields and fields["aliases"] is not None:
+            self._assign_product_aliases(product, fields["aliases"])
         if fields.get("remove_barcode"):
             product.barcode = None
         if fields.get("remove_description"):
             product.description = None
+        if fields.get("remove_brand"):
+            product.brand = None
+        if fields.get("remove_variant"):
+            product.parent_product_id = None
+            product.variant_label = None
         self.db.flush()
         return product
 

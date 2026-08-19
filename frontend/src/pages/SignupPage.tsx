@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { apiClient, apiErrorMessage } from '../api/client'
 import { useAuthStore } from '../store/auth'
+import { firstAllowedPath } from '../auth/nav'
 import type { Plan } from '../types'
 
 const INDIAN_STATE_CODES: { code: string; name: string }[] = [
@@ -51,10 +52,17 @@ export default function SignupPage() {
         plan_code: planCode,
       })
       const token = resp.data.access_token as string
-      useAuthStore.getState().setSession(token, { id: '', full_name: '', email: '' })
+      useAuthStore.getState().setSession(token, {
+        id: '',
+        full_name: '',
+        email: '',
+        role_ids: [],
+        role_names: [],
+        permissions: [],
+      })
       const me = await apiClient.get('/auth/me')
       setSession(token, me.data)
-      navigate('/')
+      navigate(firstAllowedPath(me.data))
     } catch (err) {
       setError(apiErrorMessage(err))
     } finally {

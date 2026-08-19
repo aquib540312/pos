@@ -90,7 +90,7 @@ def get_quotation(
     user: User = Depends(require_permission(Perm.QUOTATION_CREATE)),
 ):
     try:
-        return QuotationService(db).get_quotation_or_404(quotation_id)
+        return QuotationService(db).get_quotation_or_404(user.organization_id, quotation_id)
     except DomainError as exc:
         _handle(exc, db)
 
@@ -123,7 +123,7 @@ def send_quotation(
     user: User = Depends(require_permission(Perm.QUOTATION_CREATE)),
 ):
     try:
-        quotation = QuotationService(db).mark_sent(quotation_id)
+        quotation = QuotationService(db).mark_sent(user.organization_id, quotation_id)
         db.commit()
     except DomainError as exc:
         _handle(exc, db)
@@ -137,7 +137,7 @@ def expire_quotation(
     user: User = Depends(require_permission(Perm.QUOTATION_CREATE)),
 ):
     try:
-        quotation = QuotationService(db).mark_expired(quotation_id)
+        quotation = QuotationService(db).mark_expired(user.organization_id, quotation_id)
         db.commit()
     except DomainError as exc:
         _handle(exc, db)
@@ -186,7 +186,7 @@ def get_return(
     user: User = Depends(require_permission(Perm.SALES_RETURN)),
 ):
     try:
-        return SalesService(db).get_return_or_404(return_id)
+        return SalesService(db).get_return_or_404(user.organization_id, return_id)
     except DomainError as exc:
         _handle(exc, db)
 
@@ -196,7 +196,7 @@ def get_sale(
     invoice_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(require_permission(Perm.REPORTS_VIEW))
 ):
     invoice = SalesService(db).invoices.get(invoice_id)
-    if invoice is None:
+    if invoice is None or invoice.organization_id != user.organization_id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"Invoice {invoice_id} not found")
     return invoice
 

@@ -29,6 +29,7 @@ class UserResponse(BaseModel):
     is_active: bool
     role_ids: list[uuid.UUID] = Field(default_factory=list)
     role_names: list[str] = Field(default_factory=list)
+    permissions: list[str] = Field(default_factory=list)
 
     model_config = {"from_attributes": True}
 

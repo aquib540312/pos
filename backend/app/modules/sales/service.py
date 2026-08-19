@@ -5,14 +5,15 @@ from sqlalchemy.orm import Session
 
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.core.numbering import next_document_number
+from app.core.timezones import ist_today
 from app.models.billing import Payment
 from app.models.catalog import Product
-from app.models.organization import Branch
+from app.models.organization import Branch, Warehouse
 from app.models.payments import PaymentGatewayTransaction
 from app.models.sales import Quotation, QuotationItem, SalesInvoice, SalesInvoiceItem, SalesReturn, SalesReturnItem
 from app.modules.accounting.service import AccountingService
 from app.modules.catalog.repository import HSNRepository, ProductRepository
-from app.modules.gst.service import compute_line_tax, is_inter_state_supply, round_invoice_total
+from app.modules.gst.service import compute_line_tax, is_inter_state_supply, round_invoice_total, round_money
 from app.modules.inventory.service import InventoryService
 from app.modules.loyalty.service import CouponService, GiftCardService, LoyaltyService
 from app.modules.party.repository import CustomerRepository
@@ -128,8 +129,12 @@ class SalesService:
         payment_gateway_transaction_id: uuid.UUID | None = None,
     ) -> SalesInvoice:
         branch = self.db.get(Branch, branch_id)
-        if branch is None:
+        if branch is None or branch.organization_id != organization_id:
             raise NotFoundError(f"Branch {branch_id} not found")
+        warehouse = self.db.get(Warehouse, warehouse_id)
+        warehouse_branch = self.db.get(Branch, warehouse.branch_id) if warehouse else None
+        if warehouse is None or warehouse_branch is None or warehouse_branch.organization_id != organization_id:
+            raise NotFoundError(f"Warehouse {warehouse_id} not found")
 
         customer = self.customers.get(customer_id) if customer_id else None
         if is_credit_sale and (customer is None or not customer.is_credit_customer):
@@ -143,8 +148,9 @@ class SalesService:
             branch_id=branch_id,
             customer_id=customer_id,
             shift_id=shift_id,
-            invoice_number=next_document_number(self.db, SalesInvoice, "INV"),
+            invoice_number=next_document_number(self.db, SalesInvoice, "INV", organization_id),
             invoice_date=datetime.now(timezone.utc),
+            business_date=ist_today(),
             place_of_supply_state_code=buyer_state_code or branch.state_code,
             is_inter_state=inter_state,
             customer_gstin=customer.gstin if customer else None,
@@ -154,6 +160,7 @@ class SalesService:
         self.invoices.add(invoice)
 
         subtotal = discount_total = taxable_total = 0.0
+        loyalty_taxable_total = 0.0
         cgst_total = sgst_total = igst_total = cess_total = 0.0
 
         for line in items:
@@ -206,6 +213,8 @@ class SalesService:
             subtotal += line["quantity"] * unit_price
             discount_total += line.get("discount_amount", 0)
             taxable_total += breakdown.taxable_value
+            if not product.loyalty_exempt:
+                loyalty_taxable_total += breakdown.taxable_value
             cgst_total += breakdown.cgst_amount
             sgst_total += breakdown.sgst_amount
             igst_total += breakdown.igst_amount
@@ -288,7 +297,7 @@ class SalesService:
             payment_rows.append(row)
 
         if customer is not None:
-            self.loyalty.earn(customer, invoice.id, taxable_total)
+            self.loyalty.earn(customer, invoice.id, loyalty_taxable_total)
 
         self.db.flush()
         credit_shortfall = shortfall if (is_credit_sale and shortfall > 0.01) else 0.0
@@ -320,7 +329,7 @@ class SalesService:
             organization_id=organization_id,
             branch_id=branch_id,
             original_invoice_id=original_invoice_id,
-            return_number=next_document_number(self.db, SalesReturn, "RET"),
+            return_number=next_document_number(self.db, SalesReturn, "RET", organization_id),
             return_date=datetime.now(timezone.utc),
             reason=reason,
             refund_mode=refund_mode,
@@ -377,9 +386,9 @@ class SalesService:
     def list_returns(self, organization_id: uuid.UUID) -> list[SalesReturn]:
         return self.returns.list(organization_id)
 
-    def get_return_or_404(self, return_id: uuid.UUID) -> SalesReturn:
+    def get_return_or_404(self, organization_id: uuid.UUID, return_id: uuid.UUID) -> SalesReturn:
         sales_return = self.returns.get(return_id)
-        if sales_return is None:
+        if sales_return is None or sales_return.organization_id != organization_id:
             raise NotFoundError(f"Sales return {return_id} not found")
         return sales_return
 
@@ -489,7 +498,7 @@ class QuotationService:
             organization_id=organization_id,
             branch_id=branch_id,
             customer_id=customer_id,
-            quotation_number=next_document_number(self.db, Quotation, "QUO"),
+            quotation_number=next_document_number(self.db, Quotation, "QUO", organization_id),
             quotation_date=quotation_date,
             valid_until=valid_until,
             status="draft",
@@ -505,7 +514,7 @@ class QuotationService:
             unit_price = line.get("unit_price") if line.get("unit_price") is not None else float(product.sale_price)
             discount = line.get("discount_amount", 0)
             quantity = line["quantity"]
-            line_total = round(quantity * unit_price - discount, 2)
+            line_total = round_money(quantity * unit_price - discount)
             if line_total < 0:
                 raise ValidationError(f"Discount cannot exceed line value for product '{product.name}'")
 
@@ -521,26 +530,26 @@ class QuotationService:
             )
             grand_total += line_total
 
-        quotation.grand_total = round(grand_total, 2)
+        quotation.grand_total = round_money(grand_total)
         self.db.flush()
         return self.quotations.get(quotation.id)
 
-    def get_quotation_or_404(self, quotation_id: uuid.UUID) -> Quotation:
+    def get_quotation_or_404(self, organization_id: uuid.UUID, quotation_id: uuid.UUID) -> Quotation:
         quotation = self.quotations.get(quotation_id)
-        if quotation is None:
+        if quotation is None or quotation.organization_id != organization_id:
             raise NotFoundError(f"Quotation {quotation_id} not found")
         return quotation
 
-    def mark_sent(self, quotation_id: uuid.UUID) -> Quotation:
-        quotation = self.get_quotation_or_404(quotation_id)
+    def mark_sent(self, organization_id: uuid.UUID, quotation_id: uuid.UUID) -> Quotation:
+        quotation = self.get_quotation_or_404(organization_id, quotation_id)
         if quotation.status != "draft":
             raise ConflictError(f"Quotation {quotation.quotation_number} is not in draft status")
         quotation.status = "sent"
         self.db.flush()
         return quotation
 
-    def mark_expired(self, quotation_id: uuid.UUID) -> Quotation:
-        quotation = self.get_quotation_or_404(quotation_id)
+    def mark_expired(self, organization_id: uuid.UUID, quotation_id: uuid.UUID) -> Quotation:
+        quotation = self.get_quotation_or_404(organization_id, quotation_id)
         if quotation.status not in ("draft", "sent"):
             raise ConflictError(
                 f"Quotation {quotation.quotation_number} cannot be marked expired from status '{quotation.status}'"
@@ -559,7 +568,7 @@ class QuotationService:
         payments: list[dict],
         is_credit_sale: bool,
     ) -> SalesInvoice:
-        quotation = self.get_quotation_or_404(quotation_id)
+        quotation = self.get_quotation_or_404(organization_id, quotation_id)
         if quotation.status not in ("draft", "sent"):
             raise ConflictError(
                 f"Quotation {quotation.quotation_number} cannot be converted from status '{quotation.status}'"

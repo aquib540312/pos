@@ -36,3 +36,31 @@ class BranchResponse(BaseModel):
     warehouses: list[WarehouseResponse]
 
     model_config = {"from_attributes": True}
+
+
+class OrganizationProfileUpdateRequest(BaseModel):
+    """Partial update of the tenant's invoice/billing identity. Omitting a
+    field leaves it unchanged; sending it as an empty string clears it (for
+    the nullable string fields)."""
+
+    legal_name: str | None = Field(default=None, min_length=1, max_length=255)
+    trade_name: str | None = Field(default=None, min_length=1, max_length=255)
+    gstin: str | None = Field(default=None, max_length=15)
+    pan: str | None = Field(default=None, max_length=10)
+    default_state_code: str | None = Field(default=None, min_length=2, max_length=2)
+    phone: str | None = Field(default=None, max_length=20)
+    address: str | None = Field(default=None, max_length=500)
+    footer_note: str | None = Field(default=None, max_length=200)
+
+
+class OrganizationProfileResponse(BaseModel):
+    id: uuid.UUID
+    legal_name: str
+    trade_name: str
+    gstin: str | None
+    pan: str | None
+    default_state_code: str
+    phone: str | None
+    address: str | None
+    footer_note: str | None
+    has_logo: bool

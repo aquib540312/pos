@@ -31,9 +31,12 @@ export default function QuotationsPage() {
   const [quotations, setQuotations] = useState<Quotation[]>([])
   const [branches, setBranches] = useState<Branch[]>([])
   const [customerNames, setCustomerNames] = useState<Record<string, string>>({})
+  const [productNames, setProductNames] = useState<Record<string, string>>({})
   const [productTaxRates, setProductTaxRates] = useState<Record<string, number>>({})
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
+
+  const [viewDoc, setViewDoc] = useState<Quotation | null>(null)
 
   const [showForm, setShowForm] = useState(false)
   const [branchId, setBranchId] = useState('')
@@ -69,6 +72,7 @@ export default function QuotationsPage() {
     })
     apiClient.get<Product[]>('/catalog/products').then((res) => {
       setProductTaxRates(Object.fromEntries(res.data.map((p) => [p.id, p.tax_rate_percent ?? 0])))
+      setProductNames(Object.fromEntries(res.data.map((p) => [p.id, p.name])))
     })
     refresh().catch((err) => setError(apiErrorMessage(err)))
   }, [])
@@ -426,6 +430,12 @@ export default function QuotationsPage() {
                   </span>
                 </td>
                 <td className="px-4 py-3 text-right whitespace-nowrap">
+                  <button
+                    onClick={() => setViewDoc(q)}
+                    className="mr-3 text-sm font-medium text-slate-600 hover:text-slate-500 dark:text-slate-300"
+                  >
+                    View
+                  </button>
                   {(q.status === 'draft' || q.status === 'sent') && (
                     <>
                       {q.status === 'draft' && (
@@ -522,6 +532,107 @@ export default function QuotationsPage() {
           </div>
         </div>
       )}
+
+      {viewDoc && (
+        <QuotationDocModal
+          doc={viewDoc}
+          customerName={viewDoc.customer_id ? (customerNames[viewDoc.customer_id] ?? viewDoc.customer_id) : 'Walk-in'}
+          productNames={productNames}
+          onClose={() => setViewDoc(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+function QuotationDocModal({
+  doc,
+  customerName,
+  productNames,
+  onClose,
+}: {
+  doc: Quotation
+  customerName: string
+  productNames: Record<string, string>
+  onClose: () => void
+}) {
+  function printDoc() {
+    document.body.classList.add('printing-purchase')
+    window.print()
+    document.body.classList.remove('printing-purchase')
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div
+        id="print-doc"
+        onClick={(e) => e.stopPropagation()}
+        className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white p-6 text-slate-900 shadow-xl print:text-black"
+      >
+        <div className="mb-4 flex justify-end gap-2 print:hidden">
+          <button
+            onClick={printDoc}
+            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500"
+          >
+            Print
+          </button>
+          <button
+            onClick={onClose}
+            className="rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-100"
+          >
+            Close
+          </button>
+        </div>
+
+        <div className="mb-4 border-b-2 border-slate-900 pb-3">
+          <p className="text-center text-lg font-bold tracking-wide">QUOTATION</p>
+          <div className="mt-2 flex justify-between text-sm">
+            <span>
+              No: <span className="font-semibold">{doc.quotation_number}</span>
+            </span>
+            <span>
+              Date: <span className="font-semibold">{doc.quotation_date}</span>
+            </span>
+          </div>
+          <div className="mt-1 flex justify-between text-sm">
+            <span>
+              Customer: <span className="font-semibold">{customerName}</span>
+            </span>
+            {doc.valid_until && (
+              <span>
+                Valid until: <span className="font-semibold">{doc.valid_until}</span>
+              </span>
+            )}
+          </div>
+          <div className="mt-1 text-right text-xs uppercase tracking-wide text-slate-500">Status: {doc.status}</div>
+        </div>
+
+        <table className="mb-3 w-full border-collapse text-sm">
+          <thead>
+            <tr className="border-b-2 border-slate-900">
+              <th className="py-1 text-left font-semibold">Product</th>
+              <th className="py-1 text-left font-semibold">Qty</th>
+              <th className="py-1 text-left font-semibold">Unit Price (₹)</th>
+              <th className="py-1 text-left font-semibold">Discount (₹)</th>
+              <th className="py-1 text-left font-semibold">Line Total (₹)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {doc.items.map((i) => (
+              <tr key={i.id} className="border-b border-slate-300 print:border-slate-400">
+                <td className="py-1 pr-2">{productNames[i.product_id] ?? i.product_id}</td>
+                <td className="py-1 pr-2">{i.quantity}</td>
+                <td className="py-1 pr-2">{i.unit_price.toFixed(2)}</td>
+                <td className="py-1 pr-2">{i.discount_amount.toFixed(2)}</td>
+                <td className="py-1 pr-2 font-medium">{i.line_total.toFixed(2)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div className="flex justify-end text-sm font-bold">
+          <span>Grand Total: ₹{doc.grand_total.toFixed(2)}</span>
+        </div>
+      </div>
     </div>
   )
 }

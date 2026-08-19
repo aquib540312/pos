@@ -1,4 +1,3 @@
-import datetime as dt
 
 
 def _receive_stock(client, seeded_org, quantity=100, unit_cost=30):
@@ -35,7 +34,9 @@ def _sell(client, seeded_org, quantity, amount):
 
 
 def _today_range():
-    today = dt.date.today().isoformat()
+    from app.core.timezones import ist_today
+
+    today = ist_today().isoformat()
     return today, today
 
 
@@ -102,7 +103,9 @@ def test_balance_sheet_balances(client, seeded_org):
     _receive_stock(client, seeded_org, quantity=10, unit_cost=30)
     _sell(client, seeded_org, quantity=2, amount=94)
 
-    as_of = dt.date.today().isoformat()
+    from app.core.timezones import ist_today
+
+    as_of = ist_today().isoformat()
     resp = client.get("/api/v1/reports/balance-sheet", headers=seeded_org["auth_headers"], params={"as_of": as_of})
     assert resp.status_code == 200, resp.text
     bs = resp.json()

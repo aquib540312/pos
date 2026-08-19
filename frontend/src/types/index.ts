@@ -3,14 +3,37 @@ export interface Product {
   sku: string
   barcode: string | null
   name: string
+  brand: string | null
+  category_id: string | null
+  category_name: string | null
+  uom_id: string
+  hsn_code_id: string | null
   mrp: number
   sale_price: number
+  wholesale_price: number
   purchase_price: number
   tax_rate_percent: number | null
   tracks_batches: boolean
   tracks_serials: boolean
   tracks_expiry: boolean
+  is_weighted: boolean
+  low_stock_notify: boolean
+  reorder_level: number
   is_active: boolean
+  is_combo: boolean
+  combo_components: { component_product_id: string; component_product_name: string; quantity: number }[]
+  prices_gst_inclusive: boolean
+  loyalty_exempt: boolean
+  parent_product_id: string | null
+  variant_label: string | null
+  image_path: string | null
+  aliases: string[]
+}
+
+export interface Category {
+  id: string
+  name: string
+  parent_id: string | null
 }
 
 export interface BulkImportRowResult {
@@ -51,12 +74,30 @@ export interface Supplier {
   payable_balance: number
 }
 
+export interface SupplierPurchaseReturnRow {
+  supplier_id: string
+  supplier_name: string
+  purchase_count: number
+  purchase_value: number
+  return_count: number
+  return_value: number
+  net_value: number
+}
+
+export interface SupplierPurchaseReturnLedgerRow {
+  date: string
+  purchase_value: number
+  return_value: number
+  net_value: number
+}
+
 export interface PurchaseOrderItem {
   id: string
   product_id: string
   quantity_ordered: number
   quantity_received: number
   unit_cost: number
+  discount_amount: number
 }
 
 export interface PurchaseOrder {
@@ -75,6 +116,11 @@ export interface GoodsReceiptItem {
   quantity: number
   free_quantity: number
   unit_cost: number
+  discount_amount: number
+  tax_rate_percent?: number
+  cgst_amount?: number
+  sgst_amount?: number
+  igst_amount?: number
 }
 
 export interface GoodsReceipt {
@@ -82,6 +128,7 @@ export interface GoodsReceipt {
   grn_number: string
   supplier_id: string
   received_at: string
+  supplier_invoice_number?: string | null
   items: GoodsReceiptItem[]
 }
 
@@ -475,6 +522,7 @@ export interface PurchaseReturn {
   id: string
   return_number: string
   supplier_id: string
+  goods_receipt_id?: string | null
   return_date: string
   reason: string | null
   return_total: number
@@ -491,4 +539,72 @@ export interface SupplierPayment {
   paid_at: string
   note: string | null
   outstanding_payable: number
+}
+
+export interface OrgProfile {
+  id: string
+  legal_name: string
+  trade_name: string
+  gstin: string | null
+  pan: string | null
+  default_state_code: string
+  phone: string | null
+  address: string | null
+  footer_note: string | null
+  has_logo: boolean
+}
+
+export interface DiningTable {
+  id: string
+  table_number: string
+  name: string | null
+  capacity: number
+  status: 'available' | 'occupied' | 'reserved' | 'cleaning'
+  is_active: boolean
+  active_order_id: string | null
+}
+
+export interface DiningOrderItem {
+  id: string
+  product_id: string
+  product_name: string
+  quantity: number
+  unit_price: number
+  discount_amount: number
+  line_total: number
+  status: 'pending' | 'preparing' | 'ready' | 'served' | 'cancelled'
+  kot_number: string | null
+  note: string | null
+}
+
+export interface DiningOrder {
+  id: string
+  table_id: string
+  table_number: string
+  table_name: string | null
+  customer_id: string | null
+  customer_name: string | null
+  status: 'open' | 'paid' | 'cancelled'
+  opened_at: string
+  closed_at: string | null
+  kot_counter: number
+  sales_invoice_id: string | null
+  note: string | null
+  subtotal: number
+  discount_total: number
+  items: DiningOrderItem[]
+}
+
+export interface DiningOrderEstimate {
+  order_id: string
+  subtotal: number
+  taxable_total: number
+  discount_total: number
+  cgst_total: number
+  sgst_total: number
+  igst_total: number
+  cess_total: number
+  round_off: number
+  grand_total: number
+  items: DiningOrderItem[]
 }

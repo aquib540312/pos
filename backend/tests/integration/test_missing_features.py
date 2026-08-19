@@ -1,5 +1,6 @@
 from datetime import date, timedelta
 
+from app.core.timezones import ist_today
 from app.models.catalog import ProductBatch
 
 
@@ -322,7 +323,7 @@ def test_cancel_credit_invoice_reverses_balance_and_loyalty(client, seeded_org):
 def test_expiring_stock_report(client, seeded_org, db_session):
     _receive_stock(client, seeded_org, quantity=50)
     batch = db_session.query(ProductBatch).filter_by(product_id=seeded_org["product"].id).one()
-    batch.expiry_date = date.today() + timedelta(days=5)
+    batch.expiry_date = ist_today() + timedelta(days=5)
     db_session.commit()
 
     resp = client.get("/api/v1/reports/expiring-stock?within_days=30", headers=seeded_org["auth_headers"])
@@ -413,7 +414,6 @@ def test_change_password_flow(client, seeded_org):
 
 
 def test_list_and_deactivate_coupon_and_gift_card(client, seeded_org):
-    from datetime import date
 
     coupon_resp = client.post(
         "/api/v1/loyalty/coupons",

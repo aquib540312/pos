@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { apiClient, apiErrorMessage } from '../api/client'
 import UpiQrPanel from '../components/UpiQrPanel'
-import type { CartLine, Customer, FeatureFlags, PaymentGatewayTransaction, PaymentLine, Product, SaleInvoice } from '../types'
+import type { CartLine, Customer, FeatureFlags, OrgProfile, PaymentGatewayTransaction, PaymentLine, Product, SaleInvoice } from '../types'
 
 interface Warehouse {
   id: string
@@ -310,7 +310,11 @@ export default function POSPage() {
                     onClick={() => addToCart(p)}
                     className="flex w-full items-center justify-between px-4 py-2 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-700"
                   >
-                    <span>{p.name} <span className="text-slate-400">({p.sku})</span></span>
+                    <span>
+                      {p.name} <span className="text-slate-400">({p.sku})</span>
+                      {p.variant_label && <span className="ml-1 rounded bg-slate-200 px-1.5 py-0.5 text-xs dark:bg-slate-700">{p.variant_label}</span>}
+                      {p.is_weighted && <span className="ml-1 text-xs text-indigo-500">weight</span>}
+                    </span>
                     <span className="font-medium">₹{p.sale_price.toFixed(2)}</span>
                   </button>
                 </li>
@@ -341,7 +345,7 @@ export default function POSPage() {
                       <input
                         type="number"
                         min={0.001}
-                        step="1"
+                        step={line.product.is_weighted ? 0.001 : 1}
                         value={line.quantity}
                         onChange={(e) => updateLine(line.product.id, { quantity: Number(e.target.value) })}
                         className="w-20 rounded border border-slate-300 px-2 py-1 dark:border-slate-600 dark:bg-slate-700"
@@ -610,6 +614,27 @@ function Receipt({
   // slip, until the sale syncs and the server posts the real one.
   const isOfflinePending = invoice.status === 'offline_pending'
 
+  // Org branding (trade name, address, GSTIN, logo, footer note) rides along
+  // on the printed/dialog receipt so every till in the branch shares one look.
+  // Fetched here instead of at the page level because this component is the
+  // only consumer, and a 404/offline org profile shouldn't block the POS.
+  const [profile, setProfile] = useState<OrgProfile | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    apiClient
+      .get<OrgProfile>('/org/profile')
+      .then(({ data }) => {
+        if (!cancelled) setProfile(data)
+      })
+      .catch(() => {
+        /* receipt still renders without branding */
+      })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const [drawerStatus, setDrawerStatus] = useState<'idle' | 'opening' | 'failed'>('idle')
   async function openDrawer() {
     setDrawerStatus('opening')
@@ -646,6 +671,16 @@ function Receipt({
         </div>
       )}
       <div className="rounded-xl border border-slate-200 bg-white p-6 font-mono text-sm dark:border-slate-800 dark:bg-slate-800 print:w-[80mm] print:border-0 print:p-2 print:text-black">
+        {(profile?.has_logo || profile?.trade_name || profile?.legal_name) && (
+          <>
+            {profile?.has_logo && <img src="/org/logo.png" alt="Store logo" className="mx-auto mb-1 h-14 object-contain" />}
+            <p className="text-center text-sm font-bold">{profile?.trade_name || profile?.legal_name}</p>
+            {profile?.address && <p className="text-center text-xs whitespace-pre-line">{profile.address}</p>}
+            {profile?.phone && <p className="text-center text-xs">Tel: {profile.phone}</p>}
+            {profile?.gstin && <p className="text-center text-xs">GSTIN: {profile.gstin}</p>}
+            <hr className="my-2 border-dashed" />
+          </>
+        )}
         <p className="text-center text-base font-bold">{isOfflinePending ? 'PROVISIONAL RECEIPT' : 'TAX INVOICE'}</p>
         <p className="text-center text-xs">{invoice.invoice_number}</p>
         <p className="text-center text-xs">{new Date(invoice.invoice_date).toLocaleString('en-IN')}</p>
@@ -675,7 +710,11 @@ function Receipt({
         {invoice.payments.map((p) => (
           <div key={p.id} className="flex justify-between"><span>{p.method.toUpperCase()}</span><span>₹{p.amount.toFixed(2)}</span></div>
         ))}
-        <p className="mt-4 text-center text-xs">Thank you for shopping with us!</p>
+        {profile?.footer_note ? (
+          <p className="mt-4 text-center text-xs whitespace-pre-line">{profile.footer_note}</p>
+        ) : (
+          <p className="mt-4 text-center text-xs">Thank you for shopping with us!</p>
+        )}
       </div>
     </div>
   )

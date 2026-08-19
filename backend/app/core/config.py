@@ -89,6 +89,11 @@ class Settings(BaseSettings):
     sync_pull_page_size: int = 500
     sync_push_max_batch_size: int = 200
 
+    # -- Product images --------------------------------------------------
+    # Directory (relative to the backend working dir) where uploaded product
+    # photos are stored. Served back via GET /catalog/products/{id}/image.png.
+    product_image_dir: str = "uploads"
+
     # -- Background tasks (Celery) --------------------------------------
     # Normally .delay() hands a task to a separate Celery worker process
     # (docker-compose.yml's celery_worker service) so a slow/unavailable

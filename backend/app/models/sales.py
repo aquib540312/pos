@@ -2,7 +2,7 @@ import uuid
 from datetime import date, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Numeric, String
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -10,6 +10,25 @@ from app.models.mixins import GUID, TimestampMixin, UUIDPKMixin, branch_fk, org_
 
 if TYPE_CHECKING:
     from app.models.billing import Payment
+
+
+class DocumentCounter(Base, UUIDPKMixin):
+    """Per-org, per-prefix, per-year running counter used by
+    core/numbering.next_document_number so sequential numbers (INV, GRN, PO,
+    PRN, RET, QUO, TRF) survive concurrent checkouts -- a SELECT ... FOR
+    UPDATE on the matching row serializes two simultaneous allocations and
+    the unique constraint makes any programming error loud instead of
+    silently duplicating an invoice number."""
+
+    __tablename__ = "document_counters"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "prefix", "year", name="uq_document_counter_org_prefix_year"),
+    )
+
+    organization_id: Mapped[uuid.UUID] = org_fk()
+    prefix: Mapped[str] = mapped_column(String(10), nullable=False)
+    year: Mapped[int] = mapped_column(Integer, nullable=False)
+    last_number: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
 class Quotation(Base, UUIDPKMixin, TimestampMixin):
@@ -60,6 +79,10 @@ class SalesInvoice(Base, UUIDPKMixin, TimestampMixin):
 
     invoice_number: Mapped[str] = mapped_column(String(40), nullable=False, unique=True)
     invoice_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # Kolkata-calendar date the sale belongs to for compliance/reporting
+    # (invoice_date is UTC instant -- a 00:30 IST sale belongs to the IST
+    # day, see core/timezones.py). Set once at posting, never changed.
+    business_date: Mapped[date] = mapped_column(Date, nullable=False)
 
     place_of_supply_state_code: Mapped[str] = mapped_column(String(2), nullable=False)
     is_inter_state: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

@@ -2,29 +2,8 @@ import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { apiClient } from '../api/client'
 import { useAuthStore } from '../store/auth'
-import type { AppNotification, Subscription } from '../types'
-
-const NAV_ITEMS = [
-  { to: '/', label: 'Dashboard', end: true },
-  { to: '/pos', label: 'Billing (POS)' },
-  { to: '/quotations', label: 'Quotations' },
-  { to: '/shift', label: 'Shift & Cash' },
-  { to: '/sales-history', label: 'Sales & Returns' },
-  { to: '/products', label: 'Products' },
-  { to: '/customers', label: 'Customers' },
-  { to: '/suppliers', label: 'Suppliers' },
-  { to: '/purchasing', label: 'Purchasing' },
-  { to: '/stock', label: 'Stock' },
-  { to: '/stock-transfer', label: 'Stock Transfer' },
-  { to: '/staff', label: 'Staff' },
-  { to: '/branches', label: 'Branches & Warehouses' },
-  { to: '/offers', label: 'Coupons & Gift Cards' },
-  { to: '/audit-log', label: 'Audit Log' },
-  { to: '/reports', label: 'Reports' },
-  { to: '/sync', label: 'Sync Status' },
-  { to: '/billing', label: 'Billing (Subscription)' },
-  { to: '/settings', label: 'Settings' },
-]
+import { visibleNavItems } from '../auth/nav'
+import type { AppNotification, OrgProfile, Subscription } from '../types'
 
 function daysLeft(isoDate: string | null): number | null {
   if (!isoDate) return null
@@ -39,6 +18,10 @@ export default function Layout() {
   const [subscription, setSubscription] = useState<Subscription | null>(null)
   const [notifications, setNotifications] = useState<AppNotification[]>([])
   const [showBell, setShowBell] = useState(false)
+  const [profile, setProfile] = useState<OrgProfile | null>(null)
+  // user is populated by ProtectedRoute before this renders, so no flash of
+  // unauthorized entries.
+  const navItems = visibleNavItems(user)
 
   useEffect(() => {
     // A 404 here just means this org predates the subscriptions feature
@@ -48,6 +31,10 @@ export default function Layout() {
       .get<Subscription>('/subscriptions/me')
       .then((res) => setSubscription(res.data))
       .catch(() => setSubscription(null))
+    apiClient
+      .get<OrgProfile>('/org/profile')
+      .then((res) => setProfile(res.data))
+      .catch(() => setProfile(null))
     loadNotifications()
   }, [])
 
@@ -75,10 +62,15 @@ export default function Layout() {
     <div className="flex min-h-screen bg-slate-50 dark:bg-slate-900">
       <aside className="flex w-56 shrink-0 flex-col border-r border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
         <div className="border-b border-slate-200 px-4 py-4 dark:border-slate-800">
-          <span className="text-lg font-semibold text-slate-900 dark:text-slate-50">Retail POS</span>
+          <div className="flex items-center gap-2">
+            {profile?.has_logo && <img src="/org/logo.png" alt="Store logo" className="h-8 w-8 rounded object-contain" />}
+            <span className="truncate text-lg font-semibold text-slate-900 dark:text-slate-50">
+              {profile?.trade_name || profile?.legal_name || 'Retail POS'}
+            </span>
+          </div>
         </div>
         <nav className="flex-1 space-y-1 p-3">
-          {NAV_ITEMS.map((item) => (
+          {navItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}

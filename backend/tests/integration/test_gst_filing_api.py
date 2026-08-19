@@ -52,9 +52,9 @@ def _complete_b2b_sale(client, seeded_org, customer_id):
 
 
 def _current_return_period():
-    import datetime as dt
+    from app.core.timezones import ist_today
 
-    today = dt.date.today()
+    today = ist_today()
     return f"{today.month:02d}{today.year}"
 
 

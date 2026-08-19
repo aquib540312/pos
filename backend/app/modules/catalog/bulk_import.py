@@ -15,14 +15,19 @@ from app.core.exceptions import ValidationError
 REQUIRED_COLUMNS = ["sku", "name", "uom_code", "mrp", "sale_price"]
 OPTIONAL_COLUMNS = [
     "barcode",
+    "brand",
     "description",
     "category",
     "hsn_code",
     "purchase_price",
+    "wholesale_price",
     "reorder_level",
     "tracks_batches",
     "tracks_serials",
     "tracks_expiry",
+    "is_weighted",
+    "loyalty_exempt",
+    "aliases",
 ]
 ALL_COLUMNS = REQUIRED_COLUMNS + OPTIONAL_COLUMNS
 
@@ -77,14 +82,19 @@ def generate_product_import_template() -> bytes:
         "mrp": 50,
         "sale_price": 45,
         "barcode": "8901234567891",
+        "brand": "ExampleBrand",
         "description": None,
         "category": "Bakery",
         "hsn_code": "1905",
         "purchase_price": 32,
+        "wholesale_price": 40,
         "reorder_level": 10,
         "tracks_batches": "FALSE",
         "tracks_serials": "FALSE",
         "tracks_expiry": "TRUE",
+        "is_weighted": "FALSE",
+        "loyalty_exempt": "FALSE",
+        "aliases": "bread, brown bread",
     }
     sheet.append([example_row[col] for col in ALL_COLUMNS])
 
@@ -96,11 +106,16 @@ def generate_product_import_template() -> bytes:
     notes.append(["mrp", "Yes", "Maximum retail price."])
     notes.append(["sale_price", "Yes", "Selling price."])
     notes.append(["barcode", "No", "Leave blank if the product has no barcode."])
+    notes.append(["brand", "No", "Brand / manufacturer name."])
     notes.append(["category", "No", "Auto-created if it doesn't already exist."])
     notes.append(["hsn_code", "No", "Must already exist under Catalog > HSN/SAC Codes if set."])
     notes.append(["purchase_price", "No", "Defaults to 0."])
+    notes.append(["wholesale_price", "No", "B2B tier price. Defaults to 0."])
     notes.append(["reorder_level", "No", "Defaults to 0."])
     notes.append(["tracks_batches / tracks_serials / tracks_expiry", "No", "TRUE or FALSE. Defaults to FALSE."])
+    notes.append(["is_weighted", "No", "TRUE if sold by weight (KG). Defaults to FALSE."])
+    notes.append(["loyalty_exempt", "No", "TRUE to exclude from loyalty points. Defaults to FALSE."])
+    notes.append(["aliases", "No", "Comma-separated search nicknames, e.g. 'atta, flour'."])
     notes.append(["", "", "Combo products aren't supported by bulk import -- create those individually."])
 
     buffer = io.BytesIO()

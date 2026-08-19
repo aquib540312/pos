@@ -36,7 +36,7 @@ def get_current_user(
     return user
 
 
-def _user_permission_codes(db: Session, user: User) -> set[str]:
+def user_permission_codes(db: Session, user: User) -> set[str]:
     """All permission codes granted to a user via any of their role
     assignments, across all branches.
 
@@ -65,7 +65,7 @@ def require_permission(permission_code: str):
     def _checker(
         db: Session = Depends(get_db), user: User = Depends(get_current_user)
     ) -> User:
-        if permission_code not in _user_permission_codes(db, user):
+        if permission_code not in user_permission_codes(db, user):
             raise HTTPException(status.HTTP_403_FORBIDDEN, f"Missing permission: {permission_code}")
         return user
 

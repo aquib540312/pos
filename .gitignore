@@ -33,3 +33,14 @@ backend/build/pyinstaller/
 
 # Logs
 *.log
+
+# Playwright artifacts
+frontend/test-results/
+frontend/playwright-report/
+
+# Local secrets & user-uploaded content
+backend/token.txt
+backend/uploads/
+
+# Scratch experiments
+prototype/

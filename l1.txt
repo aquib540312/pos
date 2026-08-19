@@ -1,0 +1,37 @@
+Phase 1 — Restaurant Audit
+Existing restaurant backend/frontend ko inspect karo.
+Current tests aur database schema samjho.
+In areas ke missing cases identify karo:
+concurrent table/order updates
+KOT edit/cancel/reprint
+duplicate KOT
+browser refresh/network failure
+settlement/invoice failure
+discount/tax/rounding
+partial/multiple payments
+permission bypass
+table transfer/merge
+audit logging
+
+Har issue ko:
+
+Critical
+High
+Medium
+Low
+
+mein classify karo.
+
+Pehle sirf Critical + High issues fix karo.
+Har fix ke liye regression test add karo.
+Existing 284 tests + all E2E tests dobara run karo.
+Build, lint aur migration checks run karo.
+Live DB ko unnecessary modify mat karo.
+End mein mujhe exact report do:
+kya issue mila
+kya fix hua
+kaunse files change hue
+tests before/after
+koi remaining risk
+
+Important: naye features add mat karna jab tak audit complete na ho.

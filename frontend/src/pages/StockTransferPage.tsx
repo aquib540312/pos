@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { apiClient, apiErrorMessage } from '../api/client'
+import { useCan, PERMS } from '../auth/permissions'
 import type { Product } from '../types'
 
 interface Warehouse {
@@ -59,6 +60,7 @@ export default function StockTransferPage() {
   const [results, setResults] = useState<Product[]>([])
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
+  const canAdjust = useCan(PERMS.INVENTORY_ADJUST)
 
   async function refreshTransfers() {
     const res = await apiClient.get<Transfer[]>('/inventory/transfers')
@@ -164,12 +166,14 @@ export default function StockTransferPage() {
     <div>
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-50">Stock Transfer</h1>
-        <button
-          onClick={() => setShowForm((v) => !v)}
-          className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500"
-        >
-          {showForm ? 'Cancel' : '+ New Transfer'}
-        </button>
+        {canAdjust && (
+          <button
+            onClick={() => setShowForm((v) => !v)}
+            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500"
+          >
+            {showForm ? 'Cancel' : '+ New Transfer'}
+          </button>
+        )}
       </div>
 
       {error && <p className="mb-4 text-sm text-red-600 dark:text-red-400">{error}</p>}
@@ -310,7 +314,7 @@ export default function StockTransferPage() {
                 <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{formatDateTime(t.dispatched_at)}</td>
                 <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{formatDateTime(t.received_at)}</td>
                 <td className="px-4 py-3 text-right">
-                  {t.status === 'draft' && (
+                  {canAdjust && t.status === 'draft' && (
                     <button
                       onClick={() => dispatchTransfer(t.id)}
                       disabled={busy === t.id}
@@ -319,7 +323,7 @@ export default function StockTransferPage() {
                       {busy === t.id ? 'Dispatching...' : 'Dispatch'}
                     </button>
                   )}
-                  {t.status === 'dispatched' && (
+                  {canAdjust && t.status === 'dispatched' && (
                     <button
                       onClick={() => receiveTransfer(t.id)}
                       disabled={busy === t.id}

@@ -27,6 +27,11 @@ class Perm:
 
     SHIFT_MANAGE = "shift:manage"
 
+    DINING_VIEW = "dining:view"
+    DINING_ORDER = "dining:order"
+    DINING_SETTLE = "dining:settle"
+    DINING_MANAGE = "dining:manage"
+
     REPORTS_VIEW = "reports:view"
 
     ORG_MANAGE = "org:manage"
@@ -37,7 +42,8 @@ class Perm:
         USERS_MANAGE, ROLES_MANAGE, CATALOG_VIEW, CATALOG_MANAGE,
         INVENTORY_VIEW, INVENTORY_ADJUST, PARTY_MANAGE, PURCHASE_CREATE,
         PURCHASE_RECEIVE, SALES_CREATE, SALES_RETURN, QUOTATION_CREATE,
-        SHIFT_MANAGE, REPORTS_VIEW, ORG_MANAGE, SYNC_MANAGE,
+        SHIFT_MANAGE, DINING_VIEW, DINING_ORDER, DINING_SETTLE, DINING_MANAGE,
+        REPORTS_VIEW, ORG_MANAGE, SYNC_MANAGE,
     ]
 
 
@@ -48,12 +54,20 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
         Perm.CATALOG_VIEW, Perm.CATALOG_MANAGE, Perm.INVENTORY_VIEW,
         Perm.INVENTORY_ADJUST, Perm.PARTY_MANAGE, Perm.PURCHASE_CREATE,
         Perm.PURCHASE_RECEIVE, Perm.SALES_CREATE, Perm.SALES_RETURN,
-        Perm.QUOTATION_CREATE, Perm.SHIFT_MANAGE, Perm.REPORTS_VIEW,
-        Perm.SYNC_MANAGE,
+        Perm.QUOTATION_CREATE, Perm.SHIFT_MANAGE, Perm.DINING_VIEW,
+        Perm.DINING_ORDER, Perm.DINING_SETTLE, Perm.DINING_MANAGE,
+        Perm.REPORTS_VIEW, Perm.SYNC_MANAGE,
     ],
     "cashier": [
         Perm.CATALOG_VIEW, Perm.INVENTORY_VIEW, Perm.PARTY_MANAGE,
         Perm.SALES_CREATE, Perm.SALES_RETURN, Perm.QUOTATION_CREATE,
-        Perm.SHIFT_MANAGE,
+        Perm.SHIFT_MANAGE, Perm.DINING_VIEW, Perm.DINING_ORDER,
+        Perm.DINING_SETTLE,
+    ],
+    # Floor staff: take and serve orders, but cannot settle bills or
+    # manage the seating layout itself.
+    "waiter": [
+        Perm.CATALOG_VIEW, Perm.SALES_CREATE, Perm.SHIFT_MANAGE,
+        Perm.DINING_VIEW, Perm.DINING_ORDER,
     ],
 }

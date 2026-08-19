@@ -34,6 +34,22 @@ def generate_barcode_png(code: str) -> bytes:
     return buffer.getvalue()
 
 
+def generate_ean13(numeric_base: str) -> str:
+    """Build a valid EAN-13 from a 12-digit numeric base by appending the
+    standard check digit (modulo-10). Used to auto-create a unique barcode
+    when a shop adds a product without one -- GTIN-style codes scan with any
+    retail scanner. Raises InvalidLabelDataError for non-12-digit input."""
+    base = numeric_base.strip()
+    if len(base) != 12 or not base.isdigit():
+        raise InvalidLabelDataError("EAN-13 requires a 12-digit numeric base")
+    digits = [int(d) for d in base]
+    total = sum(d for i, d in enumerate(digits) if i % 2 == 0) + 3 * sum(
+        d for i, d in enumerate(digits) if i % 2 == 1
+    )
+    check = (10 - (total % 10)) % 10
+    return base + str(check)
+
+
 def generate_qr_png(data: str) -> bytes:
     qr = qrcode.QRCode(border=2, box_size=8)
     qr.add_data(data)

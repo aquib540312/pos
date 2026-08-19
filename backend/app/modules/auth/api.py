@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
-from app.core.deps import get_current_user, require_permission
+from app.core.deps import get_current_user, require_permission, user_permission_codes
 from app.core.exceptions import AuthenticationError, ConflictError, NotFoundError, ValidationError
 from app.core.permissions import Perm
 from app.db.session import get_db
@@ -26,7 +26,7 @@ from app.modules.auth.service import AuthService
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
 
-def _to_user_response(user: User) -> UserResponse:
+def _to_user_response(user: User, db: Session) -> UserResponse:
     return UserResponse(
         id=user.id,
         full_name=user.full_name,
@@ -35,6 +35,7 @@ def _to_user_response(user: User) -> UserResponse:
         is_active=user.is_active,
         role_ids=[ra.role_id for ra in user.role_assignments],
         role_names=[ra.role.name for ra in user.role_assignments],
+        permissions=sorted(user_permission_codes(db, user)),
     )
 
 
@@ -98,8 +99,8 @@ def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db))
 
 
 @router.get("/me", response_model=UserResponse)
-def me(user: User = Depends(get_current_user)) -> UserResponse:
-    return _to_user_response(user)
+def me(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> UserResponse:
+    return _to_user_response(user, db)
 
 
 @router.post("/change-password", status_code=status.HTTP_200_OK)
@@ -124,7 +125,7 @@ def list_users(
     current_user: User = Depends(require_permission(Perm.USERS_MANAGE)),
 ) -> list[UserResponse]:
     users = AuthService(db).list_users(current_user.organization_id)
-    return [_to_user_response(u) for u in users]
+    return [_to_user_response(u, db) for u in users]
 
 
 @router.post("/users", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -150,7 +151,7 @@ def create_user(
     except ValidationError as exc:
         db.rollback()
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
-    return _to_user_response(user)
+    return _to_user_response(user, db)
 
 
 @router.patch("/users/{user_id}/active", response_model=UserResponse)
@@ -171,7 +172,7 @@ def set_user_active(
     except ValidationError as exc:
         db.rollback()
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
-    return _to_user_response(user)
+    return _to_user_response(user, db)
 
 
 @router.patch("/users/{user_id}/roles", response_model=UserResponse)
@@ -188,4 +189,4 @@ def update_user_roles(
     except NotFoundError as exc:
         db.rollback()
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
-    return _to_user_response(user)
+    return _to_user_response(user, db)

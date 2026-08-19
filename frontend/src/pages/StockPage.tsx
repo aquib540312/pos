@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { apiClient, apiErrorMessage } from '../api/client'
+import { useCan, PERMS } from '../auth/permissions'
 import type { Product, StockItem, StockLedgerRow } from '../types'
 
 export default function StockPage() {
@@ -10,6 +11,7 @@ export default function StockPage() {
   const [ledger, setLedger] = useState<StockLedgerRow[]>([])
   const [ledgerProduct, setLedgerProduct] = useState<string | null>(null)
   const [form, setForm] = useState({ productId: '', quantity: '0', reason: '' })
+  const canAdjust = useCan(PERMS.INVENTORY_ADJUST)
 
   async function load() {
     try {
@@ -68,7 +70,8 @@ export default function StockPage() {
       {error && <p className="mb-4 text-sm text-red-600 dark:text-red-400">{error}</p>}
       {message && <p className="mb-4 text-sm text-emerald-600 dark:text-emerald-400">{message}</p>}
 
-      <form onSubmit={handleAdjust} className="mb-6 grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-800 md:grid-cols-4">
+      {canAdjust && (
+        <form onSubmit={handleAdjust} className="mb-6 grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-800 md:grid-cols-4">
         <select
           required
           value={form.productId}
@@ -101,7 +104,8 @@ export default function StockPage() {
         <button type="submit" className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500">
           Adjust Stock
         </button>
-      </form>
+        </form>
+      )}
 
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800">
         <table className="w-full text-left text-sm">

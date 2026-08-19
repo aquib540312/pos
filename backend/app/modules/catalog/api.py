@@ -1,8 +1,10 @@
+import os
 import uuid
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.core.deps import require_permission
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.core.permissions import Perm
@@ -44,13 +46,22 @@ def _to_product_response(service: CatalogService, product: Product) -> ProductRe
         sku=product.sku,
         barcode=product.barcode,
         name=product.name,
+        brand=product.brand,
+        category_id=product.category_id,
+        category_name=product.category.name if product.category else None,
+        uom_id=product.uom_id,
+        hsn_code_id=product.hsn_code_id,
         mrp=product.mrp,
         sale_price=product.sale_price,
+        wholesale_price=product.wholesale_price,
         purchase_price=product.purchase_price,
         tax_rate_percent=service.hsn_current_rate(product.hsn_code_id) if product.hsn_code_id else None,
         tracks_batches=product.tracks_batches,
         tracks_serials=product.tracks_serials,
         tracks_expiry=product.tracks_expiry,
+        is_weighted=product.is_weighted,
+        low_stock_notify=product.low_stock_notify,
+        reorder_level=product.reorder_level,
         is_active=product.is_active,
         is_combo=product.is_combo,
         combo_components=[
@@ -61,6 +72,12 @@ def _to_product_response(service: CatalogService, product: Product) -> ProductRe
             )
             for c in product.combo_components
         ],
+        prices_gst_inclusive=product.prices_gst_inclusive,
+        loyalty_exempt=product.loyalty_exempt,
+        parent_product_id=product.parent_product_id,
+        variant_label=product.variant_label,
+        image_path=product.image_path,
+        aliases=[a.alias for a in product.aliases],
     )
 
 
@@ -369,3 +386,55 @@ def get_product_label_sheet(
     except InvalidLabelDataError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
     return Response(content=png, media_type="image/png")
+
+
+@router.post("/products/{product_id}/image", response_model=ProductResponse)
+async def upload_product_image(
+    product_id: uuid.UUID,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission(Perm.CATALOG_MANAGE)),
+):
+    """Store a product photo under backend/uploads/ and point the product at
+    it. Served back via GET /catalog/products/{id}/image.png."""
+    service = CatalogService(db)
+    try:
+        product = service.get_product_or_404(product_id)
+    except NotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
+
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in {".png", ".jpg", ".jpeg", ".webp"}:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Image must be PNG, JPG/JPEG or WebP")
+    content = await file.read()
+    if len(content) > 2 * 1024 * 1024:
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Image must be 2 MB or smaller")
+
+    upload_dir = get_settings().product_image_dir
+    os.makedirs(upload_dir, exist_ok=True)
+    filename = f"{product.id}{ext}"
+    with open(os.path.join(upload_dir, filename), "wb") as fh:
+        fh.write(content)
+
+    product.image_path = filename
+    db.commit()
+    return _to_product_response(service, product)
+
+
+@router.get("/products/{product_id}/image.png")
+def get_product_image(
+    product_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(require_permission(Perm.CATALOG_VIEW))
+):
+    service = CatalogService(db)
+    try:
+        product = service.get_product_or_404(product_id)
+    except NotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
+    if not product.image_path:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Product has no image")
+    path = os.path.join(get_settings().product_image_dir, product.image_path)
+    if not os.path.exists(path):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Image file is missing")
+    ext = os.path.splitext(product.image_path)[1].lower()
+    media_type = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "webp": "image/webp"}.get(ext[1:], "application/octet-stream")
+    return Response(content=open(path, "rb").read(), media_type=media_type)

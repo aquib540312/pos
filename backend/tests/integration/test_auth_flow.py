@@ -1,4 +1,6 @@
 def test_login_success_and_me(client, seeded_org):
+    from app.core.permissions import Perm
+
     resp = client.post(
         "/api/v1/auth/login", data={"username": "admin@test.local", "password": "TestPass123!"}
     )
@@ -8,6 +10,36 @@ def test_login_success_and_me(client, seeded_org):
     me = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
     assert me.status_code == 200
     assert me.json()["email"] == "admin@test.local"
+    assert set(me.json()["permissions"]) == set(Perm.ALL_PERMISSIONS)
+
+
+def test_me_reflects_role_permissions(client, seeded_org, db_session):
+    from app.core.permissions import Perm
+    from app.core.security import create_access_token
+    from app.models.rbac import Role
+    from app.modules.auth.service import AuthService
+    from app.modules.rbac.repository import PermissionRepository
+
+    PermissionRepository(db_session).ensure_seeded(Perm.ALL_PERMISSIONS)
+    cashier_role = db_session.query(Role).filter(Role.name == "cashier").first()
+    assert cashier_role is not None
+
+    cashier = AuthService(db_session).create_user(
+        organization_id=seeded_org["organization"].id,
+        full_name="Cashier",
+        email="cashier@test.local",
+        password="TestPass123!",
+        role_ids=[cashier_role.id],
+    )
+    db_session.commit()
+    token = create_access_token(subject=str(cashier.id))
+
+    me = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
+    assert me.status_code == 200
+    perms = set(me.json()["permissions"])
+    assert Perm.SALES_CREATE in perms
+    assert Perm.REPORTS_VIEW not in perms
+    assert Perm.USERS_MANAGE not in perms
 
 
 def test_login_wrong_password_rejected(client, seeded_org):

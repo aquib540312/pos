@@ -92,6 +92,15 @@ def compute_line_tax(
     )
 
 
+def round_money(value: float) -> float:
+    """Round a monetary amount to 2 decimals, round-half-up. This is the
+    single money-rounding rule for the whole app: invoice tax values and
+    quotation line/grand totals must agree to the paisa, and Python's
+    built-in round() rounds half-to-even ("banker's"), which would make a
+    quotation silently differ from the invoice it converts into."""
+    return _round2(Decimal(str(value)))
+
+
 def round_invoice_total(grand_total: float) -> tuple[float, float]:
     """Round the invoice grand total to the nearest rupee (standard Indian
     retail practice) and report the round-off adjustment separately so it

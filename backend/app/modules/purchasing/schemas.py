@@ -8,6 +8,7 @@ class PurchaseOrderItemRequest(BaseModel):
     product_id: uuid.UUID
     quantity_ordered: float = Field(gt=0)
     unit_cost: float = Field(ge=0)
+    discount_amount: float = Field(default=0, ge=0)
 
 
 class PurchaseOrderCreateRequest(BaseModel):
@@ -24,6 +25,7 @@ class PurchaseOrderItemResponse(BaseModel):
     quantity_ordered: float
     quantity_received: float
     unit_cost: float
+    discount_amount: float
 
     model_config = {"from_attributes": True}
 
@@ -54,11 +56,17 @@ class GoodsReceiptItemRequest(BaseModel):
     # allows a GRN line to carry a different rate than the catalog default
     # (e.g. a supplier invoice at a different slab). Snapshot per line.
     tax_rate_percent: float | None = None
+    # Per-line discount off the gross received value (quantity * unit_cost)
+    # -- reduces the taxable value and the input GST claimed, mirroring a
+    # sale-line discount.
+    discount_amount: float = Field(default=0, ge=0)
 
     @model_validator(mode="after")
     def _free_quantity_within_total(self) -> "GoodsReceiptItemRequest":
         if self.free_quantity > self.quantity:
             raise ValueError("free_quantity cannot exceed quantity")
+        if self.discount_amount > self.quantity * self.unit_cost:
+            raise ValueError("discount_amount cannot exceed gross line value")
         return self
 
 
@@ -77,6 +85,7 @@ class GoodsReceiptItemResponse(BaseModel):
     quantity: float
     free_quantity: float
     unit_cost: float
+    discount_amount: float
     hsn_code_id: uuid.UUID | None
     tax_rate_percent: float
     cgst_amount: float
@@ -95,7 +104,6 @@ class GoodsReceiptResponse(BaseModel):
     items: list[GoodsReceiptItemResponse]
 
     model_config = {"from_attributes": True}
-
 
 class PurchaseOrderStatusUpdateRequest(BaseModel):
     status: str = Field(pattern="^(draft|submitted|cancelled|closed)$")
@@ -132,6 +140,11 @@ class PurchaseReturnItemRequest(BaseModel):
 class PurchaseReturnCreateRequest(BaseModel):
     warehouse_id: uuid.UUID
     supplier_id: uuid.UUID
+    # Optional link to the original GoodsReceipt (invoice) this return is
+    # against. When provided, returned lines can reference the GRN's lines
+    # directly (original_grn_item_id) so taxes/discounts reverse exactly as
+    # they were received.
+    goods_receipt_id: uuid.UUID | None = None
     reason: str | None = None
     items: list[PurchaseReturnItemRequest] = Field(min_length=1)
 
@@ -155,6 +168,7 @@ class PurchaseReturnResponse(BaseModel):
     id: uuid.UUID
     return_number: str
     supplier_id: uuid.UUID
+    goods_receipt_id: uuid.UUID | None
     return_date: datetime
     reason: str | None
     return_total: float

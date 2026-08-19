@@ -84,6 +84,29 @@ class CashierSalesRow(BaseModel):
     total_grand_total: float
 
 
+class SupplierPurchaseReturnRow(BaseModel):
+    """One supplier's purchases (goods received) vs returns for a date
+    range, side by side. `net_value` = purchases minus returns -- what the
+    supplier is net owed for the period."""
+
+    supplier_id: uuid.UUID
+    supplier_name: str
+    purchase_count: int
+    purchase_value: float
+    return_count: int
+    return_value: float
+    net_value: float
+
+
+class SupplierPurchaseReturnLedgerRow(BaseModel):
+    """A single supplier's per-day buy vs return for a date range."""
+
+    date: date
+    purchase_value: float
+    return_value: float
+    net_value: float
+
+
 class ExpiringStockRow(BaseModel):
     product_id: uuid.UUID
     product_name: str

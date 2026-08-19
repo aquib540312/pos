@@ -45,7 +45,7 @@ class PurchasingService:
             organization_id=organization_id,
             branch_id=branch_id,
             supplier_id=supplier_id,
-            po_number=next_document_number(self.db, PurchaseOrder, "PO"),
+            po_number=next_document_number(self.db, PurchaseOrder, "PO", organization_id),
             order_date=order_date,
             status="submitted",
             notes=notes,
@@ -58,6 +58,7 @@ class PurchasingService:
                     product_id=item["product_id"],
                     quantity_ordered=item["quantity_ordered"],
                     unit_cost=item["unit_cost"],
+                    discount_amount=item.get("discount_amount", 0),
                 )
             )
         self.db.flush()
@@ -85,7 +86,7 @@ class PurchasingService:
             purchase_order_id=purchase_order_id,
             warehouse_id=warehouse_id,
             supplier_id=supplier_id,
-            grn_number=next_document_number(self.db, GoodsReceipt, "GRN"),
+            grn_number=next_document_number(self.db, GoodsReceipt, "GRN", organization_id),
             received_at=datetime.now(timezone.utc),
             supplier_invoice_number=supplier_invoice_number,
         )
@@ -106,11 +107,16 @@ class PurchasingService:
             total_qty = float(item["quantity"])
             free_qty = float(item.get("free_quantity", 0))
             paid_qty = total_qty - free_qty
+            discount_amount = float(item.get("discount_amount", 0))
+            gross_value = paid_qty * float(item["unit_cost"])
+            if discount_amount > gross_value:
+                raise ValidationError(f"Discount exceeds gross line value for {item['product_id']}")
             # A supplier bonus/scheme (e.g. "10+1 free") spreads the same
             # invoiced cost across more physical units -- the batch's
             # landed cost per unit is lower than the invoiced unit_cost,
-            # while unit_cost itself stays the actual invoiced rate.
-            effective_unit_cost = (paid_qty * float(item["unit_cost"])) / total_qty if total_qty else 0.0
+            # while unit_cost itself stays the actual invoiced rate. A
+            # line discount lowers the landed cost further.
+            effective_unit_cost = (gross_value - discount_amount) / total_qty if total_qty else 0.0
 
             product = self.db.get(Product, item["product_id"])
             hsn_code_id = product.hsn_code_id if product else None
@@ -121,7 +127,7 @@ class PurchasingService:
             tax_rate_percent = float(tax_rate_percent or 0.0)
 
             breakdown = compute_line_tax(
-                quantity=paid_qty, unit_price=item["unit_cost"], discount_amount=0,
+                quantity=paid_qty, unit_price=item["unit_cost"], discount_amount=discount_amount,
                 tax_rate_percent=tax_rate_percent, is_inter_state=inter_state,
             )
 
@@ -142,6 +148,7 @@ class PurchasingService:
                 quantity=total_qty,
                 free_quantity=free_qty,
                 unit_cost=item["unit_cost"],
+                discount_amount=discount_amount,
                 hsn_code_id=hsn_code_id,
                 tax_rate_percent=tax_rate_percent,
                 cgst_amount=breakdown.cgst_amount,
@@ -166,7 +173,7 @@ class PurchasingService:
             if po_item is not None:
                 po_item.quantity_received = float(po_item.quantity_received) + paid_qty
 
-            line_cost = paid_qty * float(item["unit_cost"])
+            line_cost = breakdown.taxable_value
             total_cost += line_cost
             total_input_cgst += breakdown.cgst_amount
             total_input_sgst += breakdown.sgst_amount
@@ -253,6 +260,7 @@ class PurchasingService:
         branch_id: uuid.UUID,
         warehouse_id: uuid.UUID,
         supplier_id: uuid.UUID,
+        goods_receipt_id: uuid.UUID | None,
         reason: str | None,
         items: list[dict],
     ) -> PurchaseReturn:
@@ -271,12 +279,19 @@ class PurchasingService:
         if warehouse is None:
             raise NotFoundError(f"Warehouse {warehouse_id} not found")
 
+        grn = None
+        if goods_receipt_id is not None:
+            grn = self.goods_receipts.get(goods_receipt_id)
+            if grn is None or grn.supplier_id != supplier_id:
+                raise NotFoundError(f"Goods receipt {goods_receipt_id} not found")
+
         purchase_return = PurchaseReturn(
             organization_id=organization_id,
             branch_id=branch_id,
             warehouse_id=warehouse_id,
             supplier_id=supplier_id,
-            return_number=next_document_number(self.db, PurchaseReturn, "PRN"),
+            goods_receipt_id=goods_receipt_id,
+            return_number=next_document_number(self.db, PurchaseReturn, "PRN", organization_id),
             return_date=datetime.now(timezone.utc),
             reason=reason,
             is_debit_note=True,
@@ -305,6 +320,11 @@ class PurchasingService:
             taxable_value = round(float(item["quantity"]) * unit_cost, 2)
             if grn_item is not None:
                 fraction = float(item["quantity"]) / float(grn_item.quantity)
+                # Reverse the GRN line's discount proportionally too, so the
+                # returned taxable value matches what the goods were actually
+                # received at (gross minus discount).
+                discounted_taxable = float(grn_item.quantity) * float(grn_item.unit_cost) - float(grn_item.discount_amount)
+                taxable_value = round(discounted_taxable * fraction, 2)
                 cgst = round(float(grn_item.cgst_amount) * fraction, 2)
                 sgst = round(float(grn_item.sgst_amount) * fraction, 2)
                 igst = round(float(grn_item.igst_amount) * fraction, 2)
