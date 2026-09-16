@@ -66,9 +66,7 @@ class QuotationItem(Base, UUIDPKMixin):
 
 class SalesInvoice(Base, UUIDPKMixin, TimestampMixin):
     """A posted sale is immutable (see ARCHITECTURE.md #3) -- corrections go
-    through SalesReturn, never UPDATE. `status="draft"` exists only for the
-    brief window of cart-building before checkout; once status becomes
-    "posted" the row and its items must not be mutated again."""
+    through SalesReturn, never UPDATE. Customized for Saudi Arabia VAT (15%)."""
 
     __tablename__ = "sales_invoices"
 
@@ -79,28 +77,16 @@ class SalesInvoice(Base, UUIDPKMixin, TimestampMixin):
 
     invoice_number: Mapped[str] = mapped_column(String(40), nullable=False, unique=True)
     invoice_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    # Kolkata-calendar date the sale belongs to for compliance/reporting
-    # (invoice_date is UTC instant -- a 00:30 IST sale belongs to the IST
-    # day, see core/timezones.py). Set once at posting, never changed.
     business_date: Mapped[date] = mapped_column(Date, nullable=False)
 
-    place_of_supply_state_code: Mapped[str] = mapped_column(String(2), nullable=False)
-    is_inter_state: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    # Snapshotted from Customer.gstin at posting time, never re-read from
-    # the customer later (ARCHITECTURE.md #3: posted rows are immutable,
-    # and a customer's GSTIN can change after this invoice was filed).
-    # NULL means this was a B2C sale (walk-in/unregistered consumer);
-    # GSTR-1 Table 4 (B2B) vs Table 7 (B2C small) is decided by this
-    # column, not by re-checking whether customer_id has a GSTIN today.
-    customer_gstin: Mapped[str | None] = mapped_column(String(15), nullable=True)
+    # Saudi Arabia doesn't have state-based GST like India
+    # Using VAT number for B2B tracking
+    customer_vat_number: Mapped[str | None] = mapped_column(String(15), nullable=True)
 
     subtotal: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
     discount_total: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
     taxable_total: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
-    cgst_total: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
-    sgst_total: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
-    igst_total: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
-    cess_total: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
+    vat_total: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
     round_off: Mapped[float] = mapped_column(Numeric(6, 2, asdecimal=False), nullable=False, default=0)
     grand_total: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
 
@@ -116,8 +102,7 @@ class SalesInvoice(Base, UUIDPKMixin, TimestampMixin):
 
 
 class SalesInvoiceItem(Base, UUIDPKMixin):
-    """Every GST amount is stored, never recomputed later -- reports read
-    these columns directly (see ARCHITECTURE.md #4)."""
+    """Invoice line item with Saudi VAT (15%) calculation."""
 
     __tablename__ = "sales_invoice_items"
 
@@ -131,21 +116,14 @@ class SalesInvoiceItem(Base, UUIDPKMixin):
     discount_amount: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
     taxable_value: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False)
     tax_rate_percent: Mapped[float] = mapped_column(Numeric(5, 2, asdecimal=False), nullable=False, default=0)
-    cgst_amount: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
-    sgst_amount: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
-    igst_amount: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
-    cess_amount: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
+    vat_amount: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
     line_total: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False)
 
     invoice: Mapped["SalesInvoice"] = relationship(back_populates="items")
 
 
 class SalesReturn(Base, UUIDPKMixin, TimestampMixin):
-    """A return or exchange against a posted invoice. Exchange is modeled as
-    a SalesReturn (for the returned item) linked 1:1 with a new
-    SalesInvoice (for the replacement item), rather than a special-cased
-    "exchange" transaction type -- this keeps both sides of an exchange as
-    normal, auditable, immutable postings."""
+    """A return or exchange against a posted invoice. Supports weight-based returns."""
 
     __tablename__ = "sales_returns"
 
@@ -177,9 +155,7 @@ class SalesReturnItem(Base, UUIDPKMixin):
     )
     quantity: Mapped[float] = mapped_column(Numeric(14, 3, asdecimal=False), nullable=False)
     taxable_value: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False)
-    cgst_amount: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
-    sgst_amount: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
-    igst_amount: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
+    vat_amount: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
     line_total: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False)
 
     sales_return: Mapped["SalesReturn"] = relationship(back_populates="items")

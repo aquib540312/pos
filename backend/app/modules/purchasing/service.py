@@ -19,7 +19,7 @@ from app.models.purchasing import (
 )
 from app.modules.accounting.service import AccountingService
 from app.modules.catalog.repository import HSNRepository
-from app.modules.gst.service import compute_line_tax, is_inter_state_supply
+from app.modules.gst.service import compute_line_tax
 from app.modules.inventory.service import InventoryService
 from app.modules.purchasing.repository import GoodsReceiptRepository, PurchaseOrderRepository
 
@@ -77,9 +77,9 @@ class PurchasingService:
         ProductBatch docstring for why this happens even for products that
         don't track expiry), writes the purchase_receipt stock ledger
         entry via InventoryService, and -- if linked to a PO -- advances
-        that PO's quantity_received. Purchase-side GST is captured per
+        that PO's quantity_received. Purchase-side VAT is captured per
         line (from the product's HSN rate unless overridden), so Input
-        CGST/SGST/IGST credit can be posted to the ledger. This is the
+        VAT credit can be posted to the ledger. This is the
         single transaction boundary where purchased stock becomes sellable."""
         grn = GoodsReceipt(
             organization_id=organization_id,
@@ -97,11 +97,7 @@ class PurchasingService:
             raise ConflictError(f"Purchase order {po.po_number} is cancelled -- cannot receive against it")
         po_items_by_product = {i.product_id: i for i in po.items} if po else {}
         total_cost = 0.0
-        total_input_cgst = total_input_sgst = total_input_igst = 0.0
-
-        branch = self._branch_for_warehouse(warehouse_id)
-        supplier = self.db.get(Supplier, supplier_id)
-        inter_state = is_inter_state_supply(branch.state_code, supplier.state_code)
+        total_input_vat = 0.0
 
         for idx, item in enumerate(items):
             total_qty = float(item["quantity"])
@@ -111,11 +107,6 @@ class PurchasingService:
             gross_value = paid_qty * float(item["unit_cost"])
             if discount_amount > gross_value:
                 raise ValidationError(f"Discount exceeds gross line value for {item['product_id']}")
-            # A supplier bonus/scheme (e.g. "10+1 free") spreads the same
-            # invoiced cost across more physical units -- the batch's
-            # landed cost per unit is lower than the invoiced unit_cost,
-            # while unit_cost itself stays the actual invoiced rate. A
-            # line discount lowers the landed cost further.
             effective_unit_cost = (gross_value - discount_amount) / total_qty if total_qty else 0.0
 
             product = self.db.get(Product, item["product_id"])
@@ -128,7 +119,7 @@ class PurchasingService:
 
             breakdown = compute_line_tax(
                 quantity=paid_qty, unit_price=item["unit_cost"], discount_amount=discount_amount,
-                tax_rate_percent=tax_rate_percent, is_inter_state=inter_state,
+                tax_rate_percent=tax_rate_percent,
             )
 
             batch = ProductBatch(
@@ -151,9 +142,7 @@ class PurchasingService:
                 discount_amount=discount_amount,
                 hsn_code_id=hsn_code_id,
                 tax_rate_percent=tax_rate_percent,
-                cgst_amount=breakdown.cgst_amount,
-                sgst_amount=breakdown.sgst_amount,
-                igst_amount=breakdown.igst_amount,
+                vat_amount=breakdown.vat_amount,
             )
             self.db.add(grn_item)
             self.db.flush()
@@ -175,15 +164,14 @@ class PurchasingService:
 
             line_cost = breakdown.taxable_value
             total_cost += line_cost
-            total_input_cgst += breakdown.cgst_amount
-            total_input_sgst += breakdown.sgst_amount
-            total_input_igst += breakdown.igst_amount
+            total_input_vat += breakdown.vat_amount
 
         if po is not None and all(float(i.quantity_received) >= float(i.quantity_ordered) for i in po.items):
             po.status = "received"
 
-        supplier.payable_balance = float(supplier.payable_balance) + total_cost + total_input_cgst + total_input_sgst + total_input_igst
-        self.accounting.post_goods_receipt(grn, total_cost, total_input_cgst, total_input_sgst, total_input_igst)
+        supplier = self.db.get(Supplier, supplier_id)
+        supplier.payable_balance = float(supplier.payable_balance) + total_cost + total_input_vat
+        self.accounting.post_goods_receipt(grn, total_cost, total_input_vat)
 
         self.db.flush()
         return self.goods_receipts.get(grn.id)
@@ -267,7 +255,7 @@ class PurchasingService:
         """Return damaged/excess goods to a supplier. Issues stock from the
         warehouse (movement_type 'purchase_return'), reduces the supplier's
         payable, and posts the reverse-of-GRN ledger entry (credit Inventory
-        + Input GST, debit Accounts Payable)."""
+        + Input VAT, debit Accounts Payable)."""
         supplier = self.db.get(Supplier, supplier_id)
         if supplier is None or supplier.organization_id != organization_id:
             raise NotFoundError(f"Supplier {supplier_id} not found")
@@ -320,17 +308,12 @@ class PurchasingService:
             taxable_value = round(float(item["quantity"]) * unit_cost, 2)
             if grn_item is not None:
                 fraction = float(item["quantity"]) / float(grn_item.quantity)
-                # Reverse the GRN line's discount proportionally too, so the
-                # returned taxable value matches what the goods were actually
-                # received at (gross minus discount).
                 discounted_taxable = float(grn_item.quantity) * float(grn_item.unit_cost) - float(grn_item.discount_amount)
                 taxable_value = round(discounted_taxable * fraction, 2)
-                cgst = round(float(grn_item.cgst_amount) * fraction, 2)
-                sgst = round(float(grn_item.sgst_amount) * fraction, 2)
-                igst = round(float(grn_item.igst_amount) * fraction, 2)
+                vat_amount = round(float(grn_item.vat_amount) * fraction, 2)
             else:
-                cgst = sgst = igst = 0.0
-            line_total = round(taxable_value + cgst + sgst + igst, 2)
+                vat_amount = round(taxable_value * 0.15, 2)  # Default 15% VAT
+            line_total = round(taxable_value + vat_amount, 2)
 
             self.db.add(
                 PurchaseReturnItem(
@@ -341,9 +324,7 @@ class PurchasingService:
                     quantity=item["quantity"],
                     unit_cost=unit_cost,
                     taxable_value=taxable_value,
-                    cgst_amount=cgst,
-                    sgst_amount=sgst,
-                    igst_amount=igst,
+                    vat_amount=vat_amount,
                     line_total=line_total,
                 )
             )
@@ -355,9 +336,7 @@ class PurchasingService:
             organization_id, purchase_return.id, purchase_return.return_date.date(),
             purchase_return.return_number,
             round(sum(float(i.taxable_value) for i in purchase_return.items), 2),
-            round(sum(float(i.cgst_amount) for i in purchase_return.items), 2),
-            round(sum(float(i.sgst_amount) for i in purchase_return.items), 2),
-            round(sum(float(i.igst_amount) for i in purchase_return.items), 2),
+            round(sum(float(i.vat_amount) for i in purchase_return.items), 2),
         )
         self.db.flush()
         return purchase_return

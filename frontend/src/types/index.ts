@@ -579,12 +579,13 @@ export interface DiningOrderItem {
 
 export interface DiningOrder {
   id: string
-  table_id: string
+  table_id: string | null
   table_number: string
   table_name: string | null
   customer_id: string | null
   customer_name: string | null
   status: 'open' | 'paid' | 'cancelled'
+  order_type: 'dine_in' | 'parcel'
   opened_at: string
   closed_at: string | null
   kot_counter: number

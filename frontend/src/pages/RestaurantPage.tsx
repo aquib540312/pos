@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
+import { Link } from 'react-router-dom'
 import { apiClient, apiErrorMessage } from '../api/client'
 import type {
   Category,
@@ -321,7 +322,11 @@ export default function RestaurantPage() {
     if (!order) return
     setBusy(`remove-${item.id}`)
     try {
-      await apiClient.delete(`/dining/orders/${order.id}/items/${item.id}`)
+      if (item.status === 'pending') {
+        await apiClient.delete(`/dining/orders/${order.id}/items/${item.id}`)
+      } else {
+        await apiClient.post(`/dining/orders/${order.id}/items/${item.id}/cancel`, { note: 'Removed from bill' })
+      }
       await reloadOrder(order.id)
       await refreshEstimate(order.id)
       await loadTables()
@@ -488,7 +493,7 @@ export default function RestaurantPage() {
 
   const tableMap = useMemo(() => {
     const map = new Map<string, DiningOrder>()
-    for (const o of openOrders) map.set(o.table_id, o)
+    for (const o of openOrders) if (o.table_id) map.set(o.table_id, o)
     return map
   }, [openOrders])
 
@@ -564,7 +569,7 @@ export default function RestaurantPage() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-7rem)] flex-col">
+    <div className="flex h-full flex-col">
       <div className="mb-3 flex shrink-0 flex-wrap items-center justify-between gap-2">
         <div>
           <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-50">Restaurant</h1>
@@ -573,12 +578,20 @@ export default function RestaurantPage() {
             {tables.filter((t) => t.status === 'available').length} free
           </p>
         </div>
-        <button
-          onClick={() => setShowAddTable((v) => !v)}
-          className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500"
-        >
-          {showAddTable ? 'Close' : '+ Add table'}
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            to="/restaurant-order"
+            className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500"
+          >
+            🍽 Full-screen ordering
+          </Link>
+          <button
+            onClick={() => setShowAddTable((v) => !v)}
+            className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500"
+          >
+            {showAddTable ? 'Close' : '+ Add table'}
+          </button>
+        </div>
       </div>
 
       {showAddTable && (
@@ -1349,16 +1362,14 @@ function OrderItemRow({
         <span className={`ml-auto text-sm font-semibold ${cancelled ? 'text-slate-400 line-through' : 'text-slate-900 dark:text-slate-100'}`}>
           {inr(item.line_total)}
         </span>
-        {editable && (
-          <button
-            disabled={busy}
-            onClick={() => onRemove(item)}
-            className="rounded px-1.5 py-1 text-xs font-medium text-red-500 hover:bg-red-50 disabled:opacity-50 dark:hover:bg-red-950/40"
-            title="Remove item"
-          >
-            ✕
-          </button>
-        )}
+        <button
+          disabled={busy}
+          onClick={() => onRemove(item)}
+          className="rounded px-1.5 py-1 text-xs font-medium text-red-500 hover:bg-red-50 disabled:opacity-50 dark:hover:bg-red-950/40"
+          title={item.status === 'pending' ? 'Remove item' : 'Void (remove from bill)'}
+        >
+          ✕
+        </button>
       </div>
     </div>
   )

@@ -13,6 +13,7 @@ import ProductsPage from './pages/ProductsPage'
 import CustomersPage from './pages/CustomersPage'
 import POSPage from './pages/POSPage'
 import RestaurantPage from './pages/RestaurantPage'
+import RestaurantMenuPage from './pages/RestaurantMenuPage'
 import SyncDashboardPage from './pages/SyncDashboardPage'
 import ReportsPage from './pages/ReportsPage'
 import ShiftPage from './pages/ShiftPage'
@@ -39,6 +40,14 @@ export default function App() {
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route element={<ProtectedRoute />}>
+          <Route
+            path="/restaurant-order"
+            element={
+              <RequirePermission permission={PERMS.DINING_MANAGE}>
+                <RestaurantMenuPage />
+              </RequirePermission>
+            }
+          />
           <Route element={<Layout />}>
             <Route
               path="/"

@@ -18,17 +18,14 @@ from app.modules.accounting.schemas import (
     TrialBalanceResponse,
 )
 
-# Payment method -> control account code it settles into. Card/UPI/wallet
-# all land in "Bank" pending aggregator settlement -- splitting them into
-# separate clearing accounts per gateway is a Phase 2 refinement once a
-# real payment aggregator is wired up (see ROADMAP.md).
+# Payment method -> control account code it settles into. Card/bank transfer
+# all land in "Bank" pending aggregator settlement.
 _PAYMENT_METHOD_ACCOUNT = {
     "cash": "1000",
     "card": "1010",
-    "upi": "1010",
-    "wallet": "1010",
-    "gift_card": "1010",
+    "bank_transfer": "1010",
     "credit": "1100",
+    "split": "1010",
 }
 
 # Refund mode -> control account credited when money/credit actually leaves
@@ -37,8 +34,7 @@ _PAYMENT_METHOD_ACCOUNT = {
 _REFUND_MODE_ACCOUNT = {
     "cash": "1000",
     "card": "1010",
-    "upi": "1010",
-    "wallet": "1010",
+    "bank_transfer": "1010",
     "credit_note": "1100",
 }
 
@@ -82,7 +78,7 @@ class AccountingService:
         """Double-entry posting for a completed sale.
 
         Debit side: cash/bank/receivable, split by how it was actually paid.
-        Credit side: GST payable accounts at their exact stored amounts,
+        Credit side: VAT payable account at stored amount,
         rounding off as its own line, and Sales Revenue as the balancing
         plug (grand_total net of tax and rounding -- which is also net of
         any loyalty-point discount applied, since that discount already
@@ -96,18 +92,12 @@ class AccountingService:
             debits["1100"] += credit_shortfall
 
         credits: dict[str, float] = defaultdict(float)
-        if invoice.cgst_total:
-            credits["2100"] += float(invoice.cgst_total)
-        if invoice.sgst_total:
-            credits["2110"] += float(invoice.sgst_total)
-        if invoice.igst_total:
-            credits["2120"] += float(invoice.igst_total)
+        if invoice.vat_total:
+            credits["2100"] += float(invoice.vat_total)
 
         revenue_plug = (
             float(invoice.grand_total)
-            - float(invoice.cgst_total)
-            - float(invoice.sgst_total)
-            - float(invoice.igst_total)
+            - float(invoice.vat_total)
             - float(invoice.round_off)
         )
         credits["4000"] += revenue_plug
@@ -125,50 +115,37 @@ class AccountingService:
         self,
         grn: GoodsReceipt,
         total_cost: float,
-        input_cgst: float = 0,
-        input_sgst: float = 0,
-        input_igst: float = 0,
+        input_vat: float = 0,
     ) -> JournalEntry:
         """Debit Inventory at cost, credit Accounts Payable for the same
         amount. When the GRN lines carried HSN/tax data (see purchasing
-        receive_goods), the GST component is ALSO debited to the appropriate
-        Input CGST/SGST/IGST Receivable account -- this is what makes purchase-
-        side input credit claimable in GSTR-3B (previously deferred because
-        GRN lines had no tax fields)."""
+        receive_goods), the VAT component is ALSO debited to the appropriate
+        Input VAT Receivable account -- this is what makes purchase-
+        side input credit claimable."""
         if total_cost <= 0:
             raise ValueError("total_cost must be positive")
         debits: dict[str, float] = defaultdict(float)
         debits["1200"] += total_cost
-        if input_cgst:
-            debits["2200"] += round(input_cgst, 2)
-        if input_sgst:
-            debits["2210"] += round(input_sgst, 2)
-        if input_igst:
-            debits["2220"] += round(input_igst, 2)
-        credits = {"2000": round(total_cost + float(input_cgst) + float(input_sgst) + float(input_igst), 2)}
+        if input_vat:
+            debits["2200"] += round(input_vat, 2)
+        credits = {"2000": round(total_cost + float(input_vat), 2)}
         return self._post_entry(
             grn.organization_id, grn.received_at.date(), "goods_receipt", grn.id,
             f"Goods receipt {grn.grn_number}", dict(debits), dict(credits),
         )
 
     def post_sales_return(self, sales_return: SalesReturn) -> JournalEntry:
-        """Reverses the taxable value and GST of the returned lines, and
+        """Reverses the taxable value and VAT of the returned lines, and
         credits whatever account the refund actually left through (cash/
         bank immediately, or Accounts Receivable if refunded as a credit
         note against a running customer balance)."""
         taxable = sum(float(i.taxable_value) for i in sales_return.items)
-        cgst = sum(float(i.cgst_amount) for i in sales_return.items)
-        sgst = sum(float(i.sgst_amount) for i in sales_return.items)
-        igst = sum(float(i.igst_amount) for i in sales_return.items)
+        vat = sum(float(i.vat_amount) for i in sales_return.items)
 
         debits: dict[str, float] = defaultdict(float)
         debits["5900"] += taxable
-        if cgst:
-            debits["2100"] += cgst
-        if sgst:
-            debits["2110"] += sgst
-        if igst:
-            debits["2120"] += igst
+        if vat:
+            debits["2100"] += vat
 
         refund_account = _REFUND_MODE_ACCOUNT.get(sales_return.refund_mode, "1000")
         credits = {refund_account: float(sales_return.refund_total)}
@@ -180,7 +157,7 @@ class AccountingService:
 
     def post_sale_cancellation(self, invoice: SalesInvoice) -> JournalEntry:
         """Reverses the original sale's posting line-for-line: debit the
-        same revenue / refund the GST payable accounts, credit the cash /
+        same revenue / refund the VAT payable account, credit the cash /
         bank / receivable accounts that the original payments debited.
         Balances to zero with the original sale entry (the round-off line
         is reversed with the opposite sign)."""
@@ -188,9 +165,7 @@ class AccountingService:
         credits: dict[str, float] = defaultdict(float)
         revenue_plug = (
             float(invoice.grand_total)
-            - float(invoice.cgst_total)
-            - float(invoice.sgst_total)
-            - float(invoice.igst_total)
+            - float(invoice.vat_total)
             - float(invoice.round_off)
         )
         # Original sale credited revenue -> cancellation debits it back.
@@ -200,12 +175,8 @@ class AccountingService:
         elif invoice.round_off < 0:
             credits["4900"] += -float(invoice.round_off)
 
-        if invoice.cgst_total:
-            credits["2100"] += float(invoice.cgst_total)
-        if invoice.sgst_total:
-            credits["2110"] += float(invoice.sgst_total)
-        if invoice.igst_total:
-            credits["2120"] += float(invoice.igst_total)
+        if invoice.vat_total:
+            credits["2100"] += float(invoice.vat_total)
 
         # Original sale debited cash/bank/receivable -> credit it back.
         for payment in invoice.payments:
@@ -235,19 +206,15 @@ class AccountingService:
 
     def post_purchase_return(
         self, organization_id: uuid.UUID, purchase_return_id: uuid.UUID, return_date: date,
-        return_number: str, taxable: float, cgst: float, sgst: float, igst: float,
+        return_number: str, taxable: float, vat: float,
     ) -> JournalEntry:
         """Reverse of a GRN posting for the returned portion: credit
-        Inventory (at returned cost) and Input GST Receivable, debit
+        Inventory (at returned cost) and Input VAT Receivable, debit
         Accounts Payable."""
-        debits: dict[str, float] = {"2000": round(taxable + cgst + sgst + igst, 2)}
+        debits: dict[str, float] = {"2000": round(taxable + vat, 2)}
         credits: dict[str, float] = {"1200": round(taxable, 2)}
-        if cgst:
-            credits["2200"] += round(cgst, 2)
-        if sgst:
-            credits["2210"] += round(sgst, 2)
-        if igst:
-            credits["2220"] += round(igst, 2)
+        if vat:
+            credits["2200"] += round(vat, 2)
         return self._post_entry(
             organization_id, return_date, "purchase_return", purchase_return_id,
             f"Purchase return {return_number}", debits, credits,

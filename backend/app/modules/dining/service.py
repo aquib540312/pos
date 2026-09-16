@@ -9,7 +9,7 @@ from app.models.dining import DiningTable, TableOrder, TableOrderItem
 from app.models.organization import Branch
 from app.modules.catalog.repository import ProductRepository
 from app.modules.dining.repository import DiningTableRepository, TableOrderRepository
-from app.modules.gst.service import compute_line_tax, is_inter_state_supply, round_invoice_total
+from app.modules.gst.service import compute_line_tax, round_invoice_total
 from app.modules.sales.repository import SalesInvoiceRepository
 from app.modules.sales.service import SalesService
 
@@ -111,11 +111,35 @@ class DiningService:
         self,
         organization_id: uuid.UUID,
         branch_id: uuid.UUID,
-        table_id: uuid.UUID,
+        table_id: uuid.UUID | None,
+        order_type: str,
         customer_id: uuid.UUID | None,
         shift_id: uuid.UUID | None,
         note: str | None,
     ) -> TableOrder:
+        branch = self._branch_or_404(organization_id, branch_id)
+        if order_type == "parcel":
+            # Counter/takeaway: no seat is held, no table lookup, and nothing
+            # to mark occupied. The customer is optional (walk-ins settle cash
+            # without a party record).
+            order = self.orders.add(
+                TableOrder(
+                    organization_id=organization_id,
+                    branch_id=branch.id,
+                    table_id=None,
+                    customer_id=customer_id,
+                    shift_id=shift_id,
+                    status="open",
+                    order_type="parcel",
+                    opened_at=datetime.now(timezone.utc),
+                    note=note,
+                )
+            )
+            self.db.flush()
+            return self.orders.get_detailed(order.id)
+
+        if table_id is None:
+            raise ValidationError("A dine_in order requires a table_id")
         table = self.tables.get_for_update(table_id)
         if table is None or table.organization_id != organization_id:
             raise NotFoundError(f"Table {table_id} not found")
@@ -123,7 +147,6 @@ class DiningService:
             raise ValidationError(f"Table '{table.table_number}' is deactivated")
         if self._active_order_id(table.id) is not None:
             raise ConflictError(f"Table '{table.table_number}' already has an open order")
-        branch = self._branch_or_404(organization_id, branch_id)
         if branch.id != table.branch_id:
             raise ValidationError(
                 f"Branch {branch_id} does not match the table's branch ({table.branch_id})"
@@ -136,6 +159,7 @@ class DiningService:
                 customer_id=customer_id,
                 shift_id=shift_id,
                 status="open",
+                order_type="dine_in",
                 opened_at=datetime.now(timezone.utc),
                 note=note,
             )
@@ -320,7 +344,8 @@ class DiningService:
         order.status = "cancelled"
         order.note = note or order.note
         order.closed_at = datetime.now(timezone.utc)
-        self._free_table(order.table_id)
+        if order.table_id is not None:
+            self._free_table(order.table_id)
         self.db.flush()
         return self.orders.get_detailed(order.id)
 
@@ -340,10 +365,9 @@ class DiningService:
         hsn = HSNRepository(self.db)
         branch = self.db.get(Branch, order.branch_id)
         customer = self.db.get(CustomerModel, order.customer_id) if order.customer_id else None
-        inter_state = is_inter_state_supply(branch.state_code, customer.state_code if customer else None)
 
         subtotal = discount_total = taxable_total = 0.0
-        cgst_total = sgst_total = igst_total = cess_total = 0.0
+        vat_total = 0.0
         items = []
         for item in order.items:
             if item.status == "cancelled":
@@ -351,22 +375,17 @@ class DiningService:
             product = products_repo.get(item.product_id)
             tax_rate = hsn.get_effective_tax_rate(product.hsn_code_id, datetime.now(timezone.utc).date()) if product else None
             if product is None or product.hsn_code_id is None or tax_rate is None:
-                raise ValidationError(f"No effective GST rate configured for product '{item.product_id}'")
+                raise ValidationError(f"No effective VAT rate configured for product '{item.product_id}'")
             breakdown = compute_line_tax(
                 quantity=float(item.quantity),
                 unit_price=float(item.unit_price),
                 discount_amount=float(item.discount_amount),
                 tax_rate_percent=float(tax_rate.rate_percent),
-                is_inter_state=inter_state,
-                cess_percent=float(tax_rate.cess_percent),
             )
             subtotal += float(item.quantity) * float(item.unit_price)
             discount_total += float(item.discount_amount)
             taxable_total += breakdown.taxable_value
-            cgst_total += breakdown.cgst_amount
-            sgst_total += breakdown.sgst_amount
-            igst_total += breakdown.igst_amount
-            cess_total += breakdown.cess_amount
+            vat_total += breakdown.vat_amount
             items.append({
                 "id": item.id,
                 "product_id": item.product_id,
@@ -380,16 +399,13 @@ class DiningService:
                 "note": item.note,
             })
 
-        grand_total, round_off = round_invoice_total(taxable_total + cgst_total + sgst_total + igst_total + cess_total)
+        grand_total, round_off = round_invoice_total(taxable_total + vat_total)
         return order, {
             "order_id": order.id,
             "subtotal": subtotal,
             "taxable_total": taxable_total,
             "discount_total": discount_total,
-            "cgst_total": cgst_total,
-            "sgst_total": sgst_total,
-            "igst_total": igst_total,
-            "cess_total": cess_total,
+            "vat_total": vat_total,
             "round_off": round_off,
             "grand_total": grand_total,
             "items": items,
@@ -438,7 +454,8 @@ class DiningService:
         order.sales_invoice_id = invoice.id
         order.status = "paid"
         order.closed_at = datetime.now(timezone.utc)
-        self._free_table(order.table_id)
+        if order.table_id is not None:
+            self._free_table(order.table_id)
         self.db.flush()
         return self.orders.get_detailed(order.id), invoice
 

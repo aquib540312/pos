@@ -93,7 +93,7 @@ def seeded_org(db_session):
     catalog = CatalogService(db_session)
     uom = catalog.create_uom(org.id, "PCS", "Pieces")
     hsn = catalog.create_hsn(
-        org.id, code="1905", description="Bakery", is_service=False, rate_percent=18, cess_percent=0,
+        org.id, code="1905", description="Bakery", is_service=False, rate_percent=15, cess_percent=0,
         effective_from=date(2017, 7, 1),
     )
     product = catalog.create_product(

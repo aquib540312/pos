@@ -53,11 +53,12 @@ def _serialize_order(order: TableOrder, product_names: dict[uuid.UUID, str]) -> 
     return {
         "id": order.id,
         "table_id": order.table_id,
-        "table_number": order.table.table_number if order.table else "",
-        "table_name": order.table.name if order.table else None,
+        "table_number": order.table.table_number if order.table else ("PARCEL" if order.order_type == "parcel" else ""),
+        "table_name": order.table.name if order.table else (None if order.order_type == "parcel" else None),
         "customer_id": order.customer_id,
         "customer_name": order.customer.name if order.customer else None,
         "status": order.status,
+        "order_type": order.order_type,
         "opened_at": order.opened_at,
         "closed_at": order.closed_at,
         "kot_counter": order.kot_counter,
@@ -222,11 +223,14 @@ def open_order(
     service = DiningService(db)
     try:
         order = service.open_order(
-            user.organization_id, branch_id, payload.table_id, payload.customer_id, payload.shift_id, payload.note
+            user.organization_id, branch_id, payload.table_id, payload.order_type,
+            payload.customer_id, payload.shift_id, payload.note
         )
         write_audit_log(
             db, user.organization_id, user.id, "dining.order_open", "table_order", order.id,
-            {"table_id": str(payload.table_id), "shift_id": str(payload.shift_id) if payload.shift_id else None},
+            {"table_id": str(payload.table_id) if payload.table_id else None,
+             "order_type": payload.order_type,
+             "shift_id": str(payload.shift_id) if payload.shift_id else None},
         )
         db.commit()
     except DomainError as exc:

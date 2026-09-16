@@ -7,6 +7,7 @@ from app.models import (  # noqa: F401
     audit,
     billing,
     catalog,
+    cutting,
     dining,
     gst_filing,
     inventory,
@@ -20,4 +21,5 @@ from app.models import (  # noqa: F401
     sales,
     subscriptions,
     sync,
+    waste,
 )

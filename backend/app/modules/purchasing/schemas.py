@@ -88,9 +88,7 @@ class GoodsReceiptItemResponse(BaseModel):
     discount_amount: float
     hsn_code_id: uuid.UUID | None
     tax_rate_percent: float
-    cgst_amount: float
-    sgst_amount: float
-    igst_amount: float
+    vat_amount: float
 
     model_config = {"from_attributes": True}
 
@@ -156,9 +154,7 @@ class PurchaseReturnItemResponse(BaseModel):
     quantity: float
     unit_cost: float
     taxable_value: float
-    cgst_amount: float
-    sgst_amount: float
-    igst_amount: float
+    vat_amount: float
     line_total: float
 
     model_config = {"from_attributes": True}

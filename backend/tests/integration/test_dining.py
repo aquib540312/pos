@@ -378,3 +378,83 @@ def test_dining_idempotent_settle(client, seeded_org):
     assert second.status_code == 201, second.text
     assert second.json()["id"] == first.json()["id"]
     assert second.json()["grand_total"] == first.json()["grand_total"]
+
+
+def test_dining_parcel_order_no_table_needed(client, seeded_org):
+    """Parcel/takeaway orders are table-less, settle with cash, and don't
+    occupy or free any dining table."""
+    auth = seeded_org["auth_headers"]
+    branch_id = seeded_org["branch"].id
+    warehouse_id = seeded_org["warehouse"].id
+    product_id = seeded_org["product"].id
+
+    _receive_stock(client, seeded_org)
+    table = _create_table(client, branch_id, auth)
+
+    opened = client.post(
+        "/api/v1/dining/orders",
+        params={"branch_id": str(branch_id)},
+        headers=auth,
+        json={"order_type": "parcel", "note": "Counter takeaway"},
+    )
+    assert opened.status_code == 201, opened.text
+    order = opened.json()
+    assert order["order_type"] == "parcel"
+    assert order["table_id"] is None
+    assert order["table_number"] == "PARCEL"
+    assert order["status"] == "open"
+
+    # the (existing) table stays available -- a parcel never occupies it
+    listed = client.get("/api/v1/dining/tables", params={"branch_id": str(branch_id)}, headers=auth)
+    row = next(t for t in listed.json() if t["id"] == table["id"])
+    assert row["status"] == "available"
+
+    # multiple concurrent parcel orders are allowed (no table to clash)
+    second = client.post(
+        "/api/v1/dining/orders",
+        params={"branch_id": str(branch_id)},
+        headers=auth,
+        json={"order_type": "parcel"},
+    )
+    assert second.status_code == 201, second.text
+
+    # adding items and sending KOT work exactly like dine-in
+    added = client.post(
+        f"/api/v1/dining/orders/{order['id']}/items",
+        headers=auth,
+        json={"items": [{"product_id": str(product_id), "quantity": 2}]},
+    )
+    assert added.status_code == 200
+    item_id = added.json()["items"][0]["id"]
+    kot = client.post(f"/api/v1/dining/orders/{order['id']}/kitchen", headers=auth)
+    assert kot.status_code == 200
+    assert next(i for i in kot.json()["items"] if i["id"] == item_id)["kot_number"] == "KOT-1"
+
+    est = client.post(f"/api/v1/dining/orders/{order['id']}/estimate", headers=auth)
+    assert est.json()["grand_total"] == 94.0  # 2 x 40 + 18% GST, rounded
+
+    settled = client.post(
+        f"/api/v1/dining/orders/{order['id']}/settle",
+        headers=auth,
+        json={
+            "warehouse_id": str(warehouse_id),
+            "payments": [{"method": "cash", "amount": 94.0}],
+        },
+    )
+    assert settled.status_code == 201, settled.text
+    assert settled.json()["grand_total"] == 94.0
+
+    order_after = client.get(f"/api/v1/dining/orders/{order['id']}", headers=auth)
+    assert order_after.json()["status"] == "paid"
+
+
+def test_dining_parcel_requires_branch(client, seeded_org):
+    """Parcel orders still belong to a branch (GST sourcing needs it)."""
+    auth = seeded_org["auth_headers"]
+    resp = client.post(
+        "/api/v1/dining/orders",
+        params={"branch_id": str("00000000-0000-0000-0000-000000000000")},
+        headers=auth,
+        json={"order_type": "parcel"},
+    )
+    assert resp.status_code == 404

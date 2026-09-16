@@ -37,8 +37,9 @@ _TRACKED_FIELDS: dict[type, tuple[str, list[str]]] = {
     Customer: (
         "customer",
         [
-            "id", "organization_id", "name", "phone", "email", "gstin", "state_code", "address",
-            "is_credit_customer", "credit_limit", "credit_balance", "loyalty_points_balance", "is_active",
+            "id", "organization_id", "name", "name_arabic", "phone", "email", "vat_number", "cr_number", "state_code", "address",
+            "customer_type", "price_level", "is_credit_customer", "credit_limit", "credit_balance",
+            "payment_terms_days", "outstanding_balance", "total_purchases", "loyalty_points_balance", "is_active",
         ],
     ),
     StockItem: ("stock_item", ["id", "organization_id", "warehouse_id", "product_id", "batch_id", "quantity_on_hand"]),

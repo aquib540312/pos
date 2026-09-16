@@ -64,19 +64,8 @@ class TaxRate(Base, UUIDPKMixin):
 
 
 class Product(Base, UUIDPKMixin, TimestampMixin):
-    """A billable item. Beyond the core tax/stock mechanics this carries the
-    fields a *universal* POS (grocery, medical, electronics, garment) needs
-    at the till:
-    - `brand` / `image_path`: quick visual recognition on the billing screen.
-    - `is_weighted`: sold by weight (KG/g), not by integer count.
-    - `loyalty_exempt`: excluded from loyalty-point accrual (e.g. tobacco).
-    - `prices_gst_inclusive`: MRP/sale price entered inclusive of GST (the
-      common retail convention in India); the effective GST-exclusive price
-      is derived from the HSN's rate and stored in `sale_price`.
-    - `wholesale_price`: B2B tier used by quotation/wholesale flows.
-    - `low_stock_notify`: whether the low-stock reorder alert applies.
-    - `parent_product_id` + `variant_label`: garment/electronics variants
-      (a size/colour line item sharing this product's HSN/UOM)."""
+    """A billable item. Customized for Beef Wholesale + Retail business in Saudi Arabia.
+    Supports variable-weight sales, multiple price levels, and beef-specific attributes."""
 
     __tablename__ = "products"
     __table_args__ = (
@@ -88,10 +77,12 @@ class Product(Base, UUIDPKMixin, TimestampMixin):
     category_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("categories.id"), nullable=True)
     hsn_code_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("hsn_codes.id"), nullable=True)
     uom_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("units_of_measure.id"), nullable=False)
+    supplier_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("suppliers.id"), nullable=True)
 
     sku: Mapped[str] = mapped_column(String(64), nullable=False)
     barcode: Mapped[str | None] = mapped_column(String(64))
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    name_arabic: Mapped[str | None] = mapped_column(String(255))
     brand: Mapped[str | None] = mapped_column(String(120))
     description: Mapped[str | None] = mapped_column(String(1000))
     image_path: Mapped[str | None] = mapped_column(String(255))
@@ -100,6 +91,11 @@ class Product(Base, UUIDPKMixin, TimestampMixin):
     sale_price: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
     wholesale_price: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
     purchase_price: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
+    restaurant_price: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
+    vip_price: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
+    cost_per_kg: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
+    selling_price_per_kg: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
+    minimum_selling_quantity: Mapped[float] = mapped_column(Numeric(12, 3, asdecimal=False), nullable=False, default=0)
 
     tracks_batches: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     tracks_serials: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
@@ -117,9 +113,17 @@ class Product(Base, UUIDPKMixin, TimestampMixin):
     parent_product_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("products.id"), nullable=True)
     variant_label: Mapped[str | None] = mapped_column(String(80))
 
+    # Beef-specific fields
+    beef_cut: Mapped[str | None] = mapped_column(String(100))
+    fresh_frozen: Mapped[str | None] = mapped_column(String(20))  # fresh|frozen
+    local_imported: Mapped[str | None] = mapped_column(String(20))  # local|imported
+    country_of_origin: Mapped[str | None] = mapped_column(String(100))
+    storage_location: Mapped[str | None] = mapped_column(String(100))
+
     hsn_code: Mapped["HSNCode | None"] = relationship()
     uom: Mapped["UnitOfMeasure"] = relationship()
     category: Mapped["Category | None"] = relationship()
+    supplier: Mapped["Supplier | None"] = relationship(foreign_keys=[supplier_id])
     combo_components: Mapped[list["ComboComponent"]] = relationship(
         foreign_keys="ComboComponent.combo_product_id", back_populates="combo_product"
     )

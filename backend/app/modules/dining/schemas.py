@@ -32,7 +32,14 @@ class TableResponse(BaseModel):
 
 
 class OrderOpenRequest(BaseModel):
-    table_id: uuid.UUID
+    # Parcel/takeaway orders are table-less (order_type='parcel'); dine_in
+    # orders require a table_id. Validate-via-service, not here, so the
+    # rule lives in one place.
+    table_id: uuid.UUID | None = None
+    order_type: str = Field(
+        default="dine_in", pattern="^(dine_in|parcel)$",
+        description="dine_in occupies a room table; parcel is counter/takeaway (no table)",
+    )
     customer_id: uuid.UUID | None = None
     shift_id: uuid.UUID | None = None
     note: str | None = Field(default=None, max_length=255)
@@ -105,12 +112,13 @@ class OrderItemResponse(BaseModel):
 
 class TableOrderResponse(BaseModel):
     id: uuid.UUID
-    table_id: uuid.UUID
+    table_id: uuid.UUID | None
     table_number: str
     table_name: str | None
     customer_id: uuid.UUID | None
     customer_name: str | None
     status: str
+    order_type: str
     opened_at: datetime
     closed_at: datetime | None
     kot_counter: int

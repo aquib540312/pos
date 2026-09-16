@@ -21,6 +21,11 @@ OPTIONAL_COLUMNS = [
     "hsn_code",
     "purchase_price",
     "wholesale_price",
+    "restaurant_price",
+    "vip_price",
+    "cost_per_kg",
+    "selling_price_per_kg",
+    "minimum_selling_quantity",
     "reorder_level",
     "tracks_batches",
     "tracks_serials",
@@ -28,6 +33,12 @@ OPTIONAL_COLUMNS = [
     "is_weighted",
     "loyalty_exempt",
     "aliases",
+    "name_arabic",
+    "beef_cut",
+    "fresh_frozen",
+    "local_imported",
+    "country_of_origin",
+    "storage_location",
 ]
 ALL_COLUMNS = REQUIRED_COLUMNS + OPTIONAL_COLUMNS
 
@@ -77,24 +88,35 @@ def generate_product_import_template() -> bytes:
     sheet.append(ALL_COLUMNS)
     example_row = {
         "sku": "BRD-002",
-        "name": "Brown Bread 400g",
-        "uom_code": "PCS",
+        "name": "Beef Tenderloin",
+        "uom_code": "KG",
         "mrp": 50,
         "sale_price": 45,
         "barcode": "8901234567891",
-        "brand": "ExampleBrand",
-        "description": None,
-        "category": "Bakery",
-        "hsn_code": "1905",
+        "brand": None,
+        "description": "Premium beef tenderloin",
+        "category": "Beef",
+        "hsn_code": "0201",
         "purchase_price": 32,
         "wholesale_price": 40,
+        "restaurant_price": 37,
+        "vip_price": 35,
+        "cost_per_kg": 30,
+        "selling_price_per_kg": 45,
+        "minimum_selling_quantity": 0.5,
         "reorder_level": 10,
-        "tracks_batches": "FALSE",
+        "tracks_batches": "TRUE",
         "tracks_serials": "FALSE",
         "tracks_expiry": "TRUE",
-        "is_weighted": "FALSE",
+        "is_weighted": "TRUE",
         "loyalty_exempt": "FALSE",
-        "aliases": "bread, brown bread",
+        "aliases": "tenderloin, beef tenderloin",
+        "name_arabic": "فيليه بقر",
+        "beef_cut": "Tenderloin",
+        "fresh_frozen": "fresh",
+        "local_imported": "local",
+        "country_of_origin": "Saudi Arabia",
+        "storage_location": "Cold Storage A",
     }
     sheet.append([example_row[col] for col in ALL_COLUMNS])
 
@@ -111,11 +133,22 @@ def generate_product_import_template() -> bytes:
     notes.append(["hsn_code", "No", "Must already exist under Catalog > HSN/SAC Codes if set."])
     notes.append(["purchase_price", "No", "Defaults to 0."])
     notes.append(["wholesale_price", "No", "B2B tier price. Defaults to 0."])
+    notes.append(["restaurant_price", "No", "Restaurant customer price. Defaults to 0."])
+    notes.append(["vip_price", "No", "VIP customer price. Defaults to 0."])
+    notes.append(["cost_per_kg", "No", "Cost per KG. Defaults to 0."])
+    notes.append(["selling_price_per_kg", "No", "Selling price per KG. Defaults to 0."])
+    notes.append(["minimum_selling_quantity", "No", "Minimum selling quantity. Defaults to 0."])
     notes.append(["reorder_level", "No", "Defaults to 0."])
     notes.append(["tracks_batches / tracks_serials / tracks_expiry", "No", "TRUE or FALSE. Defaults to FALSE."])
     notes.append(["is_weighted", "No", "TRUE if sold by weight (KG). Defaults to FALSE."])
     notes.append(["loyalty_exempt", "No", "TRUE to exclude from loyalty points. Defaults to FALSE."])
     notes.append(["aliases", "No", "Comma-separated search nicknames, e.g. 'atta, flour'."])
+    notes.append(["name_arabic", "No", "Arabic product name."])
+    notes.append(["beef_cut", "No", "Beef cut type, e.g. 'Tenderloin', 'Ribeye'."])
+    notes.append(["fresh_frozen", "No", "'fresh' or 'frozen'."])
+    notes.append(["local_imported", "No", "'local' or 'imported'."])
+    notes.append(["country_of_origin", "No", "Country of origin for the product."])
+    notes.append(["storage_location", "No", "Storage location in the warehouse."])
     notes.append(["", "", "Combo products aren't supported by bulk import -- create those individually."])
 
     buffer = io.BytesIO()

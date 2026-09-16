@@ -13,7 +13,7 @@ from app.models.payments import PaymentGatewayTransaction
 from app.models.sales import Quotation, QuotationItem, SalesInvoice, SalesInvoiceItem, SalesReturn, SalesReturnItem
 from app.modules.accounting.service import AccountingService
 from app.modules.catalog.repository import HSNRepository, ProductRepository
-from app.modules.gst.service import compute_line_tax, is_inter_state_supply, round_invoice_total, round_money
+from app.modules.gst.service import compute_line_tax, round_invoice_total, round_money
 from app.modules.inventory.service import InventoryService
 from app.modules.loyalty.service import CouponService, GiftCardService, LoyaltyService
 from app.modules.party.repository import CustomerRepository
@@ -140,9 +140,6 @@ class SalesService:
         if is_credit_sale and (customer is None or not customer.is_credit_customer):
             raise ValidationError("A credit sale requires a customer flagged as a credit customer")
 
-        buyer_state_code = customer.state_code if customer else None
-        inter_state = is_inter_state_supply(branch.state_code, buyer_state_code)
-
         invoice = SalesInvoice(
             organization_id=organization_id,
             branch_id=branch_id,
@@ -151,9 +148,7 @@ class SalesService:
             invoice_number=next_document_number(self.db, SalesInvoice, "INV", organization_id),
             invoice_date=datetime.now(timezone.utc),
             business_date=ist_today(),
-            place_of_supply_state_code=buyer_state_code or branch.state_code,
-            is_inter_state=inter_state,
-            customer_gstin=customer.gstin if customer else None,
+            customer_vat_number=customer.vat_number if customer else None,
             is_credit_sale=is_credit_sale,
             status="posted",
         )
@@ -161,18 +156,18 @@ class SalesService:
 
         subtotal = discount_total = taxable_total = 0.0
         loyalty_taxable_total = 0.0
-        cgst_total = sgst_total = igst_total = cess_total = 0.0
+        vat_total = 0.0
 
         for line in items:
             product = self.products.get(line["product_id"])
             if product is None:
                 raise NotFoundError(f"Product {line['product_id']} not found")
             if product.hsn_code_id is None:
-                raise ValidationError(f"Product '{product.name}' has no HSN/SAC code configured for GST")
+                raise ValidationError(f"Product '{product.name}' has no HSN/SAC code configured for VAT")
 
             tax_rate = self.hsn.get_effective_tax_rate(product.hsn_code_id, invoice.invoice_date.date())
             if tax_rate is None:
-                raise ValidationError(f"No effective GST rate configured for product '{product.name}'")
+                raise ValidationError(f"No effective VAT rate configured for product '{product.name}'")
 
             unit_price = line.get("unit_price") if line.get("unit_price") is not None else float(product.sale_price)
             try:
@@ -181,8 +176,6 @@ class SalesService:
                     unit_price=unit_price,
                     discount_amount=line.get("discount_amount", 0),
                     tax_rate_percent=float(tax_rate.rate_percent),
-                    is_inter_state=inter_state,
-                    cess_percent=float(tax_rate.cess_percent),
                 )
             except ValueError as exc:
                 raise ValidationError(f"Invalid line for product '{product.name}': {exc}") from exc
@@ -202,10 +195,7 @@ class SalesService:
                     discount_amount=line.get("discount_amount", 0),
                     taxable_value=breakdown.taxable_value,
                     tax_rate_percent=breakdown.tax_rate_percent,
-                    cgst_amount=breakdown.cgst_amount,
-                    sgst_amount=breakdown.sgst_amount,
-                    igst_amount=breakdown.igst_amount,
-                    cess_amount=breakdown.cess_amount,
+                    vat_amount=breakdown.vat_amount,
                     line_total=breakdown.line_total,
                 )
             )
@@ -215,10 +205,7 @@ class SalesService:
             taxable_total += breakdown.taxable_value
             if not product.loyalty_exempt:
                 loyalty_taxable_total += breakdown.taxable_value
-            cgst_total += breakdown.cgst_amount
-            sgst_total += breakdown.sgst_amount
-            igst_total += breakdown.igst_amount
-            cess_total += breakdown.cess_amount
+            vat_total += breakdown.vat_amount
 
         loyalty_discount = 0.0
         if redeem_loyalty_points > 0:
@@ -232,17 +219,14 @@ class SalesService:
             coupon, coupon_discount = self.coupons.validate(organization_id, coupon_code, taxable_total)
 
         pre_round_total = (
-            taxable_total + cgst_total + sgst_total + igst_total + cess_total - loyalty_discount - coupon_discount
+            taxable_total + vat_total - loyalty_discount - coupon_discount
         )
         grand_total, round_off = round_invoice_total(pre_round_total)
 
         invoice.subtotal = subtotal
         invoice.discount_total = discount_total
         invoice.taxable_total = taxable_total
-        invoice.cgst_total = cgst_total
-        invoice.sgst_total = sgst_total
-        invoice.igst_total = igst_total
-        invoice.cess_total = cess_total
+        invoice.vat_total = vat_total
         invoice.round_off = round_off
         invoice.grand_total = grand_total
         invoice.loyalty_points_redeemed = redeem_loyalty_points
@@ -317,10 +301,8 @@ class SalesService:
         items: list[dict],
     ) -> SalesReturn:
         """Reverses stock (back into the batch it was issued from) and
-        GST proportionally to the fraction of the original line quantity
-        being returned. Loyalty points earned on the returned portion are
-        intentionally not clawed back in Phase 1 (see ROADMAP.md) -- flag
-        for follow-up if that matters for your loyalty program design."""
+        VAT proportionally to the fraction of the original line quantity
+        being returned. Supports weight-based returns."""
         original_invoice = self.invoices.get(original_invoice_id)
         if original_invoice is None:
             raise NotFoundError(f"Invoice {original_invoice_id} not found")
@@ -346,10 +328,8 @@ class SalesService:
 
             fraction = line["quantity"] / float(original_item.quantity)
             taxable_value = round(float(original_item.taxable_value) * fraction, 2)
-            cgst = round(float(original_item.cgst_amount) * fraction, 2)
-            sgst = round(float(original_item.sgst_amount) * fraction, 2)
-            igst = round(float(original_item.igst_amount) * fraction, 2)
-            line_total = round(taxable_value + cgst + sgst + igst, 2)
+            vat_amount = round(float(original_item.vat_amount) * fraction, 2)
+            line_total = round(taxable_value + vat_amount, 2)
 
             self._receive_stock_for_return_line(
                 organization_id, warehouse_id, original_item.product_id, original_item.batch_id, line["quantity"],
@@ -362,9 +342,7 @@ class SalesService:
                     original_invoice_item_id=original_item.id,
                     quantity=line["quantity"],
                     taxable_value=taxable_value,
-                    cgst_amount=cgst,
-                    sgst_amount=sgst,
-                    igst_amount=igst,
+                    vat_amount=vat_amount,
                     line_total=line_total,
                 )
             )

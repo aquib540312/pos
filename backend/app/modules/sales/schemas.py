@@ -12,7 +12,7 @@ class SaleLineRequest(BaseModel):
 
 
 class PaymentRequest(BaseModel):
-    method: str = Field(pattern="^(cash|card|upi|wallet|credit|gift_card)$")
+    method: str = Field(pattern="^(cash|card|bank_transfer|credit|split)$")
     amount: float = Field(gt=0)
     reference: str | None = None
 
@@ -49,10 +49,7 @@ class SaleInvoiceItemResponse(BaseModel):
     discount_amount: float
     taxable_value: float
     tax_rate_percent: float
-    cgst_amount: float
-    sgst_amount: float
-    igst_amount: float
-    cess_amount: float
+    vat_amount: float
     line_total: float
 
     model_config = {"from_attributes": True}
@@ -73,15 +70,11 @@ class SaleInvoiceResponse(BaseModel):
     invoice_date: datetime
     branch_id: uuid.UUID
     customer_id: uuid.UUID | None
-    place_of_supply_state_code: str
-    is_inter_state: bool
+    customer_vat_number: str | None
     subtotal: float
     discount_total: float
     taxable_total: float
-    cgst_total: float
-    sgst_total: float
-    igst_total: float
-    cess_total: float
+    vat_total: float
     round_off: float
     grand_total: float
     is_credit_sale: bool
@@ -124,9 +117,7 @@ class ReturnItemResponse(BaseModel):
     original_invoice_item_id: uuid.UUID
     quantity: float
     taxable_value: float
-    cgst_amount: float
-    sgst_amount: float
-    igst_amount: float
+    vat_amount: float
     line_total: float
 
     model_config = {"from_attributes": True}

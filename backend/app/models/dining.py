@@ -77,7 +77,9 @@ class TableOrder(Base, UUIDPKMixin, TimestampMixin):
 
     organization_id: Mapped[uuid.UUID] = org_fk()
     branch_id: Mapped[uuid.UUID] = branch_fk()
-    table_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("dining_tables.id"), nullable=False, index=True)
+    # NULL only for parcel/takeaway orders (order_type='parcel') -- those
+    # don't occupy a seat.
+    table_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("dining_tables.id"), nullable=True, index=True)
     customer_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("customers.id"), nullable=True)
     shift_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("shifts.id"), nullable=True)
     # Set once the bill is settled with a real invoice; null until then.
@@ -87,6 +89,9 @@ class TableOrder(Base, UUIDPKMixin, TimestampMixin):
 
     # open|paid|cancelled
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="open")
+    # dine_in|parcel -- a parcel order records no table and is settled at the
+    # counter (takeaway), while dine_in occupies a room table.
+    order_type: Mapped[str] = mapped_column(String(20), nullable=False, default="dine_in")
     opened_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # Number of kitchen tickets already emitted for this order -- each
@@ -94,7 +99,7 @@ class TableOrder(Base, UUIDPKMixin, TimestampMixin):
     kot_counter: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     note: Mapped[str | None] = mapped_column(String(255))
 
-    table: Mapped["DiningTable"] = relationship(back_populates="orders")
+    table: Mapped["DiningTable | None"] = relationship(back_populates="orders")
     customer: Mapped["Customer | None"] = relationship("Customer")
     items: Mapped[list["TableOrderItem"]] = relationship(back_populates="order", order_by="TableOrderItem.created_at")
 

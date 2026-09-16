@@ -47,21 +47,20 @@ def test_goods_receipt_updates_supplier_payable_and_ledger(client, seeded_org, d
     from app.models.party import Supplier
 
     supplier = db_session.get(Supplier, supplier_id)
-    # 10 * 30 = 300 taxable + 18% GST (54) the supplier bills on it.
-    assert float(supplier.payable_balance) == 354.0
+    # 10 * 30 = 300 taxable + 15% VAT (45) the supplier bills on it.
+    assert float(supplier.payable_balance) == 345.0
 
     entry = db_session.query(JournalEntry).filter_by(reference_type="goods_receipt").one()
     lines = db_session.query(JournalLine).filter_by(entry_id=entry.id).all()
     by_code = {db_session.get(LedgerAccount, line.account_id).code: (line.debit, line.credit) for line in lines}
     assert by_code["1200"] == (300.0, 0.0)  # Inventory debited
-    assert by_code["2200"] == (27.0, 0.0)  # Input CGST receivable debited
-    assert by_code["2210"] == (27.0, 0.0)  # Input SGST receivable debited
-    assert by_code["2000"] == (0.0, 354.0)  # Accounts Payable credited
+    assert by_code["2200"] == (45.0, 0.0)   # Input VAT receivable debited
+    assert by_code["2000"] == (0.0, 345.0)  # Accounts Payable credited
 
 
 def test_sale_and_return_post_balanced_journal_entries(client, seeded_org, db_session):
     _receive_stock(client, seeded_org, quantity=10, unit_cost=30)
-    invoice = _sell(client, seeded_org, quantity=4, amount=189)  # 4*40=160 taxable, 18% => 28.8 tax => 188.8 -> 189
+    invoice = _sell(client, seeded_org, quantity=4, amount=184)  # 4*40=160 taxable, 15% VAT => 24 tax => 184
 
     invoice_item_id = invoice["items"][0]["id"]
     return_resp = client.post(
@@ -86,7 +85,7 @@ def test_sale_and_return_post_balanced_journal_entries(client, seeded_org, db_se
 
 def test_profit_and_loss_reflects_sale(client, seeded_org):
     _receive_stock(client, seeded_org, quantity=10, unit_cost=30)
-    _sell(client, seeded_org, quantity=2, amount=94)  # 2*40=80 taxable, 18% => 14.4 tax => 94.4 -> 94
+    _sell(client, seeded_org, quantity=2, amount=92)  # 2*40=80 taxable, 15% VAT => 12 tax => 92
 
     start, end = _today_range()
     resp = client.get(
@@ -101,7 +100,7 @@ def test_profit_and_loss_reflects_sale(client, seeded_org):
 
 def test_balance_sheet_balances(client, seeded_org):
     _receive_stock(client, seeded_org, quantity=10, unit_cost=30)
-    _sell(client, seeded_org, quantity=2, amount=94)
+    _sell(client, seeded_org, quantity=2, amount=92)
 
     from app.core.timezones import ist_today
 

@@ -17,6 +17,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: '/', label: 'Dashboard', end: true, permission: PERMS.REPORTS_VIEW },
   { to: '/pos', label: 'Billing (POS)', permission: PERMS.SALES_CREATE },
   { to: '/restaurant', label: 'Restaurant', permission: PERMS.DINING_MANAGE },
+  { to: '/restaurant-order', label: 'Restaurant Order Screen', permission: PERMS.DINING_MANAGE },
   { to: '/quotations', label: 'Quotations', permission: PERMS.QUOTATION_CREATE },
   { to: '/shift', label: 'Shift & Cash', permission: PERMS.SHIFT_MANAGE },
   { to: '/sales-history', label: 'Sales & Returns', permission: PERMS.REPORTS_VIEW },

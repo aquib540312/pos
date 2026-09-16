@@ -8,6 +8,7 @@ Create Date: 2026-08-17 13:30:00.000000
 from typing import Sequence, Union
 
 from alembic import op
+from sqlalchemy import text
 
 # revision identifiers, used by Alembic.
 revision: str = 'd4e5f6a7b8c9'
@@ -27,8 +28,8 @@ def upgrade() -> None:
         "table_orders",
         ["table_id"],
         unique=True,
-        sqlite_where="status = 'open'",
-        postgresql_where="status = 'open'",
+        sqlite_where=text("status = 'open'"),
+        postgresql_where=text("status = 'open'"),
     )
 
 

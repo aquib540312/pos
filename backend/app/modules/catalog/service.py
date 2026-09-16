@@ -225,6 +225,7 @@ class CatalogService:
         fields = {
             "barcode": optional_str(raw, "barcode"),
             "name": name,
+            "name_arabic": optional_str(raw, "name_arabic"),
             "brand": optional_str(raw, "brand"),
             "description": optional_str(raw, "description"),
             "category_id": category_id,
@@ -233,13 +234,23 @@ class CatalogService:
             "mrp": mrp,
             "sale_price": sale_price,
             "wholesale_price": wholesale_price,
+            "restaurant_price": optional_number(raw, "restaurant_price", default=0),
+            "vip_price": optional_number(raw, "vip_price", default=0),
             "purchase_price": purchase_price,
+            "cost_per_kg": optional_number(raw, "cost_per_kg", default=0),
+            "selling_price_per_kg": optional_number(raw, "selling_price_per_kg", default=0),
+            "minimum_selling_quantity": optional_number(raw, "minimum_selling_quantity", default=0),
             "reorder_level": reorder_level,
             "tracks_batches": optional_bool(raw, "tracks_batches", default=False),
             "tracks_serials": optional_bool(raw, "tracks_serials", default=False),
             "tracks_expiry": optional_bool(raw, "tracks_expiry", default=False),
             "is_weighted": optional_bool(raw, "is_weighted", default=False),
             "loyalty_exempt": optional_bool(raw, "loyalty_exempt", default=False),
+            "beef_cut": optional_str(raw, "beef_cut"),
+            "fresh_frozen": optional_str(raw, "fresh_frozen"),
+            "local_imported": optional_str(raw, "local_imported"),
+            "country_of_origin": optional_str(raw, "country_of_origin"),
+            "storage_location": optional_str(raw, "storage_location"),
         }
 
         existing = self.products.get_by_sku(organization_id, sku)
@@ -287,10 +298,13 @@ class CatalogService:
                 raise ConflictError(f"Barcode '{barcode}' already exists")
             product.barcode = barcode
 
-        for key in ("name", "description", "category_id", "hsn_code_id", "uom_id",
+        for key in ("name", "name_arabic", "description", "category_id", "hsn_code_id", "uom_id", "supplier_id",
                     "mrp", "sale_price", "purchase_price", "reorder_level", "is_active",
-                    "brand", "wholesale_price", "low_stock_notify", "is_weighted",
-                    "loyalty_exempt", "prices_gst_inclusive", "parent_product_id", "variant_label"):
+                    "brand", "wholesale_price", "restaurant_price", "vip_price",
+                    "cost_per_kg", "selling_price_per_kg", "minimum_selling_quantity",
+                    "low_stock_notify", "is_weighted",
+                    "loyalty_exempt", "prices_gst_inclusive", "parent_product_id", "variant_label",
+                    "beef_cut", "fresh_frozen", "local_imported", "country_of_origin", "storage_location"):
             if fields.get(key) is not None:
                 setattr(product, key, fields[key])
 
