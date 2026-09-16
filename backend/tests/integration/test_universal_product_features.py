@@ -64,15 +64,15 @@ def test_generate_barcode_produces_valid_ean13(client, seeded_org):
 
 
 def test_gst_inclusive_price_derives_exclusive_sale_price(client, seeded_org):
-    body = _create_payload(seeded_org, hsn_code_id=str(seeded_org["hsn"].id), mrp=118, sale_price=118,
+    body = _create_payload(seeded_org, hsn_code_id=str(seeded_org["hsn"].id), mrp=115, sale_price=115,
                            prices_gst_inclusive=True)
     resp = client.post("/api/v1/catalog/products", json=body, headers=seeded_org["auth_headers"])
     assert resp.status_code == 201, resp.text
     data = resp.json()
     assert data["prices_gst_inclusive"] is True
-    # 118 inclusive at 18% -> 100 exclusive
+    # 115 inclusive at 15% -> 100 exclusive
     assert round(data["sale_price"], 2) == 100.0
-    assert data["tax_rate_percent"] == 18.0
+    assert data["tax_rate_percent"] == 15.0
 
 
 def test_non_inclusive_price_is_stored_as_is(client, seeded_org):
@@ -160,7 +160,7 @@ def test_loyalty_exempt_products_skip_point_accrual(client, seeded_org, db_sessi
             {"product_id": exempt_resp.json()["id"], "quantity": 1, "discount_amount": 0},
             {"product_id": non_exempt_resp.json()["id"], "quantity": 1, "discount_amount": 0},
         ],
-        "payments": [{"method": "cash", "amount": 118}],
+        "payments": [{"method": "cash", "amount": 115}],
     }
     sale_resp = client.post("/api/v1/sales", json=sale, headers=seeded_org["auth_headers"])
     assert sale_resp.status_code == 201, sale_resp.text

@@ -35,7 +35,7 @@ def _offline_sale_payload(seeded_org, quantity=1, client_operation_id=None):
     # Product sale_price=40 @ 18% GST (9% CGST + 9% SGST), rounded to the
     # nearest rupee by the server -- matches test_sales_flow.py's
     # established grand_total for this exact product/quantity/tax combo.
-    amount = round(40 * quantity * 1.18)
+    amount = round(40 * quantity * 1.15)
     return {
         "client_operation_id": client_operation_id or str(uuid.uuid4()),
         "occurred_at": datetime.now(timezone.utc).isoformat(),

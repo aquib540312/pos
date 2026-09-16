@@ -56,7 +56,7 @@ def _receive_stock(client, org, quantity=100, unit_cost=30):
     assert grn.status_code == 201, grn.text
 
 
-def _sell(client, org, quantity=2, amount=94):
+def _sell(client, org, quantity=2, amount=92):
     resp = client.post(
         "/api/v1/sales",
         headers=org["auth_headers"],

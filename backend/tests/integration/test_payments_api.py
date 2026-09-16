@@ -25,13 +25,13 @@ def test_create_upi_qr_stores_transaction(client, seeded_org, monkeypatch):
     resp = client.post(
         "/api/v1/payments/razorpay/qr",
         headers=seeded_org["auth_headers"],
-        json={"amount": 236.0, "receipt_reference": "INV/2026/000001"},
+        json={"amount": 230.0, "receipt_reference": "INV/2026/000001"},
     )
     assert resp.status_code == 201, resp.text
     body = resp.json()
     assert body["status"] == "created"
     assert body["gateway_reference"] == "qr_fake123"
-    assert body["amount"] == 236.0
+    assert body["amount"] == 230.0
 
 
 def test_webhook_marks_transaction_paid(client, seeded_org, monkeypatch, db_session):

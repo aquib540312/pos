@@ -134,10 +134,7 @@ class OrderEstimateResponse(BaseModel):
     subtotal: float
     taxable_total: float
     discount_total: float
-    cgst_total: float
-    sgst_total: float
-    igst_total: float
-    cess_total: float
+    vat_total: float
     round_off: float
     grand_total: float
     items: list[OrderItemResponse]

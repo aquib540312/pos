@@ -174,7 +174,7 @@ def test_selling_combo_decrements_component_stock_not_combo_itself(client, seede
             "branch_id": str(seeded_org["branch"].id),
             "warehouse_id": str(seeded_org["warehouse"].id),
             "items": [{"product_id": combo["id"], "quantity": 3}],
-            "payments": [{"method": "cash", "amount": 106}],  # 3*30=90 taxable, 18% => 16.2 -> 106.2 -> 106
+            "payments": [{"method": "cash", "amount": 104}],  # 3*30=90 taxable, 15% => 13.5 -> 103.5 -> 104
         },
     )
     assert sale_resp.status_code == 201, sale_resp.text
@@ -218,7 +218,7 @@ def test_returning_combo_restores_component_stock(client, seeded_org):
             "branch_id": str(seeded_org["branch"].id),
             "warehouse_id": str(seeded_org["warehouse"].id),
             "items": [{"product_id": combo["id"], "quantity": 3}],
-            "payments": [{"method": "cash", "amount": 106}],
+            "payments": [{"method": "cash", "amount": 104}],
         },
     )
     invoice = sale_resp.json()

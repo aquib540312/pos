@@ -147,6 +147,6 @@ def test_download_bulk_import_template_has_expected_headers(client, seeded_org):
     # apart from ALL_COLUMNS (this happened for real: mrp ended up holding
     # a category name).
     example_row = dict(zip(header, (c.value for c in sheet[2]), strict=True))
-    assert example_row["uom_code"] == "PCS"
+    assert example_row["uom_code"] == "KG"
     assert isinstance(example_row["mrp"], (int, float))
     assert isinstance(example_row["sale_price"], (int, float))

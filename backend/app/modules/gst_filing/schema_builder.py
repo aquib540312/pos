@@ -20,11 +20,12 @@ class HSNSummaryLine:
     hsn_code: str
     tax_rate_percent: float
     taxable_value: float
-    cgst: float
-    sgst: float
-    igst: float
-    cess: float
-    invoice_count: int
+    vat: float = 0.0
+    cgst: float = 0.0
+    sgst: float = 0.0
+    igst: float = 0.0
+    cess: float = 0.0
+    invoice_count: int = 0
 
 
 @dataclass(frozen=True)
@@ -80,8 +81,9 @@ def build_gstr1_json(
                     "hsn_sc": line.hsn_code,
                     "uqc": "OTH",
                     "qty": 0,
-                    "val": round(line.taxable_value + line.cgst + line.sgst + line.igst + line.cess, 2),
+                    "val": round(line.taxable_value + line.vat + line.cgst + line.sgst + line.igst + line.cess, 2),
                     "txval": round(line.taxable_value, 2),
+                    "taxamt": round(line.vat, 2),
                     "iamt": round(line.igst, 2),
                     "camt": round(line.cgst, 2),
                     "samt": round(line.sgst, 2),

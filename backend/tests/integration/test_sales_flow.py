@@ -30,17 +30,15 @@ def test_full_sale_computes_gst_and_deducts_stock(client, seeded_org, db_session
             "branch_id": str(seeded_org["branch"].id),
             "warehouse_id": str(seeded_org["warehouse"].id),
             "items": [{"product_id": str(seeded_org["product"].id), "quantity": 3, "discount_amount": 5}],
-            "payments": [{"method": "cash", "amount": 136}],
+            "payments": [{"method": "cash", "amount": 132}],
         },
     )
     assert sale_resp.status_code == 201, sale_resp.text
     invoice = sale_resp.json()
 
     assert invoice["taxable_total"] == 115.0
-    assert invoice["cgst_total"] == 10.35
-    assert invoice["sgst_total"] == 10.35
-    assert invoice["igst_total"] == 0.0
-    assert invoice["grand_total"] == 136.0
+    assert invoice["vat_total"] == 17.25
+    assert invoice["grand_total"] == 132.0
     assert invoice["status"] == "posted"
 
     from app.models.inventory import StockItem
@@ -59,7 +57,7 @@ def test_sale_without_enough_stock_is_rejected(client, seeded_org):
             "branch_id": str(seeded_org["branch"].id),
             "warehouse_id": str(seeded_org["warehouse"].id),
             "items": [{"product_id": str(seeded_org["product"].id), "quantity": 5}],
-            "payments": [{"method": "cash", "amount": 236}],
+            "payments": [{"method": "cash", "amount": 230}],
         },
     )
     assert sale_resp.status_code == 409
@@ -169,7 +167,7 @@ def _paid_gateway_transaction(db_session, seeded_org, amount, reference="qr_paid
 
 def test_sale_with_paid_gateway_transaction_is_completed_and_transaction_reserved(client, seeded_org, db_session):
     _receive_stock(client, seeded_org, quantity=10)
-    transaction = _paid_gateway_transaction(db_session, seeded_org, amount=47.0)
+    transaction = _paid_gateway_transaction(db_session, seeded_org, amount=46.0)
 
     sale_resp = client.post(
         "/api/v1/sales",
@@ -184,10 +182,10 @@ def test_sale_with_paid_gateway_transaction_is_completed_and_transaction_reserve
     )
     assert sale_resp.status_code == 201, sale_resp.text
     invoice = sale_resp.json()
-    assert invoice["grand_total"] == 47.0
+    assert invoice["grand_total"] == 46.0
     upi_payments = [p for p in invoice["payments"] if p["method"] == "upi"]
     assert len(upi_payments) == 1
-    assert upi_payments[0]["amount"] == 47.0
+    assert upi_payments[0]["amount"] == 46.0
     assert upi_payments[0]["reference"] == "qr_paid_test"
 
     db_session.refresh(transaction)
@@ -199,7 +197,7 @@ def test_reusing_a_consumed_gateway_transaction_is_rejected(client, seeded_org, 
     a retried or duplicated POST /sales with the same transaction id must
     not be allowed to pay for a second invoice."""
     _receive_stock(client, seeded_org, quantity=10)
-    transaction = _paid_gateway_transaction(db_session, seeded_org, amount=47.0)
+    transaction = _paid_gateway_transaction(db_session, seeded_org, amount=46.0)
 
     first = client.post(
         "/api/v1/sales",
@@ -236,7 +234,7 @@ def test_sale_with_unpaid_gateway_transaction_is_rejected(client, seeded_org, db
         organization_id=seeded_org["organization"].id,
         provider="razorpay",
         gateway_reference="qr_not_paid",
-        amount=47.0,
+        amount=46.0,
         status="created",
         receipt_reference="INV/2026/000051",
     )
@@ -262,7 +260,7 @@ def test_sale_uses_gateway_transaction_amount_not_client_supplied_amount(client,
     request also carries an (invalid, mismatched) cash tender, the
     server-derived UPI amount always comes from the transaction row."""
     _receive_stock(client, seeded_org, quantity=10)
-    transaction = _paid_gateway_transaction(db_session, seeded_org, amount=47.0, reference="qr_amount_test")
+    transaction = _paid_gateway_transaction(db_session, seeded_org, amount=46.0, reference="qr_amount_test")
 
     sale_resp = client.post(
         "/api/v1/sales",
@@ -278,7 +276,7 @@ def test_sale_uses_gateway_transaction_amount_not_client_supplied_amount(client,
     assert sale_resp.status_code == 201, sale_resp.text
     invoice = sale_resp.json()
     upi_payments = [p for p in invoice["payments"] if p["method"] == "upi"]
-    assert upi_payments[0]["amount"] == 47.0
+    assert upi_payments[0]["amount"] == 46.0
 
 
 def test_return_reverses_stock_and_computes_refund(client, seeded_org, db_session):
@@ -291,7 +289,7 @@ def test_return_reverses_stock_and_computes_refund(client, seeded_org, db_sessio
             "branch_id": str(seeded_org["branch"].id),
             "warehouse_id": str(seeded_org["warehouse"].id),
             "items": [{"product_id": str(seeded_org["product"].id), "quantity": 4}],
-            "payments": [{"method": "cash", "amount": 189}],
+            "payments": [{"method": "cash", "amount": 184}],
         },
     )
     assert sale_resp.status_code == 201, sale_resp.text

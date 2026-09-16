@@ -38,7 +38,7 @@ def test_sale_with_customer_phone_queues_receipt_sms(client, seeded_org, monkeyp
             "warehouse_id": str(seeded_org["warehouse"].id),
             "customer_id": customer_id,
             "items": [{"product_id": str(seeded_org["product"].id), "quantity": 1}],
-            "payments": [{"method": "cash", "amount": 47}],
+            "payments": [{"method": "cash", "amount": 46}],
         },
     )
     assert sale_resp.status_code == 201, sale_resp.text
@@ -64,7 +64,7 @@ def test_sale_without_customer_does_not_attempt_sms(client, seeded_org, monkeypa
             "branch_id": str(seeded_org["branch"].id),
             "warehouse_id": str(seeded_org["warehouse"].id),
             "items": [{"product_id": str(seeded_org["product"].id), "quantity": 1}],
-            "payments": [{"method": "cash", "amount": 47}],
+            "payments": [{"method": "cash", "amount": 46}],
         },
     )
     assert sale_resp.status_code == 201, sale_resp.text
@@ -92,7 +92,7 @@ def test_notification_dispatch_failure_does_not_break_checkout(client, seeded_or
             "warehouse_id": str(seeded_org["warehouse"].id),
             "customer_id": customer_id,
             "items": [{"product_id": str(seeded_org["product"].id), "quantity": 1}],
-            "payments": [{"method": "cash", "amount": 47}],
+            "payments": [{"method": "cash", "amount": 46}],
         },
     )
     assert sale_resp.status_code == 201, sale_resp.text  # sale still succeeds despite broker failure

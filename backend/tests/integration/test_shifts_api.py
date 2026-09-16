@@ -89,15 +89,15 @@ def test_current_shift_running_cash_sales_reflects_cash_payments_only(client, se
     )
     shift_id = open_resp.json()["id"]
 
-    _sell(client, seeded_org, amount=47, shift_id=shift_id, method="cash")
-    _sell(client, seeded_org, amount=47, shift_id=shift_id, method="card")  # not cash -- must not count
+    _sell(client, seeded_org, amount=46, shift_id=shift_id, method="cash")
+    _sell(client, seeded_org, amount=46, shift_id=shift_id, method="card")  # not cash -- must not count
 
     current = client.get(
         "/api/v1/billing/shifts/current",
         headers=seeded_org["auth_headers"],
         params={"branch_id": str(seeded_org["branch"].id)},
     ).json()
-    assert current["running_cash_sales"] == 47
+    assert current["running_cash_sales"] == 46
 
 
 def test_close_shift_computes_variance(client, seeded_org):
@@ -108,7 +108,7 @@ def test_close_shift_computes_variance(client, seeded_org):
         json={"branch_id": str(seeded_org["branch"].id), "opening_cash": 1000},
     )
     shift_id = open_resp.json()["id"]
-    _sell(client, seeded_org, amount=47, shift_id=shift_id, method="cash")
+    _sell(client, seeded_org, amount=46, shift_id=shift_id, method="cash")
 
     close_resp = client.post(
         f"/api/v1/billing/shifts/{shift_id}/close",
@@ -118,9 +118,9 @@ def test_close_shift_computes_variance(client, seeded_org):
     assert close_resp.status_code == 200, close_resp.text
     closed = close_resp.json()
     assert closed["status"] == "closed"
-    assert closed["expected_closing_cash"] == 1047
+    assert closed["expected_closing_cash"] == 1046
     assert closed["counted_closing_cash"] == 1035
-    assert closed["cash_variance"] == -12
+    assert closed["cash_variance"] == -11
 
     # Closed shift no longer shows up as "current".
     current_resp = client.get(

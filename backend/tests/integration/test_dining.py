@@ -110,12 +110,12 @@ def test_dining_full_flow_till_settle(client, seeded_org):
     assert kot_item["status"] == "preparing"
     assert kot_item["kot_number"] == "KOT-1"
 
-    # estimate now matches the shelf of a later sale: 2 x 40 + 18% GST = 94.4
+    # estimate now matches the shelf of a later sale: 2 x 40 + 15% VAT = 92
     est = client.post(f"/api/v1/dining/orders/{order['id']}/estimate", headers=auth)
     assert est.status_code == 200
     assert est.json()["subtotal"] == 80.0
     assert est.json()["taxable_total"] == 80.0
-    assert est.json()["grand_total"] == 94.0  # 94.4 rounds to the rupee
+    assert est.json()["grand_total"] == 92.0  # 92.0
 
     # mark served
     served = client.post(
@@ -130,14 +130,13 @@ def test_dining_full_flow_till_settle(client, seeded_org):
         headers=auth,
         json={
             "warehouse_id": str(warehouse_id),
-            "payments": [{"method": "cash", "amount": 94.0}],
+            "payments": [{"method": "cash", "amount": 92.0}],
         },
     )
     assert settled.status_code == 201, settled.text
     invoice = settled.json()
-    assert invoice["grand_total"] == 94.0
-    assert invoice["cgst_total"] == 7.2
-    assert invoice["sgst_total"] == 7.2
+    assert invoice["grand_total"] == 92.0
+    assert invoice["vat_total"] == 12.0
 
     # order is now paid and table freed up
     order_after = client.get(f"/api/v1/dining/orders/{order['id']}", headers=auth)
@@ -371,7 +370,7 @@ def test_dining_idempotent_settle(client, seeded_org):
     )
     client.post(f"/api/v1/dining/orders/{opened['id']}/kitchen", headers=auth)
 
-    body = {"warehouse_id": str(warehouse_id), "payments": [{"method": "cash", "amount": 47.0}]}
+    body = {"warehouse_id": str(warehouse_id), "payments": [{"method": "cash", "amount": 46.0}]}
     first = client.post(f"/api/v1/dining/orders/{opened['id']}/settle", headers=auth, json=body)
     assert first.status_code == 201, first.text
     second = client.post(f"/api/v1/dining/orders/{opened['id']}/settle", headers=auth, json=body)
@@ -431,18 +430,18 @@ def test_dining_parcel_order_no_table_needed(client, seeded_org):
     assert next(i for i in kot.json()["items"] if i["id"] == item_id)["kot_number"] == "KOT-1"
 
     est = client.post(f"/api/v1/dining/orders/{order['id']}/estimate", headers=auth)
-    assert est.json()["grand_total"] == 94.0  # 2 x 40 + 18% GST, rounded
+    assert est.json()["grand_total"] == 92.0  # 2 x 40 + 15% VAT, rounded
 
     settled = client.post(
         f"/api/v1/dining/orders/{order['id']}/settle",
         headers=auth,
         json={
             "warehouse_id": str(warehouse_id),
-            "payments": [{"method": "cash", "amount": 94.0}],
+            "payments": [{"method": "cash", "amount": 92.0}],
         },
     )
     assert settled.status_code == 201, settled.text
-    assert settled.json()["grand_total"] == 94.0
+    assert settled.json()["grand_total"] == 92.0
 
     order_after = client.get(f"/api/v1/dining/orders/{order['id']}", headers=auth)
     assert order_after.json()["status"] == "paid"

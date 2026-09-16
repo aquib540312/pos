@@ -24,7 +24,7 @@ def _complete_sale(client, seeded_org):
             "branch_id": str(seeded_org["branch"].id),
             "warehouse_id": str(seeded_org["warehouse"].id),
             "items": [{"product_id": str(seeded_org["product"].id), "quantity": 1}],
-            "payments": [{"method": "cash", "amount": 47}],
+            "payments": [{"method": "cash", "amount": 46}],
         },
     )
     assert sale_resp.status_code == 201, sale_resp.text
@@ -44,7 +44,7 @@ def _complete_b2b_sale(client, seeded_org, customer_id):
             "warehouse_id": str(seeded_org["warehouse"].id),
             "customer_id": customer_id,
             "items": [{"product_id": str(seeded_org["product"].id), "quantity": 1}],
-            "payments": [{"method": "cash", "amount": 47}],
+            "payments": [{"method": "cash", "amount": 46}],
         },
     )
     assert sale_resp.status_code == 201, sale_resp.text
@@ -82,7 +82,8 @@ def test_full_gstr1_generate_submit_status_flow_with_mock_gsp(client, seeded_org
     assert payload["status"] == "generated"
     assert payload["payload"]["gstin"] == "27AAAAA0000A1Z5"
     assert payload["payload"]["hsn"]["data"][0]["hsn_sc"] == seeded_org["hsn"].code
-    assert len(payload["payload"]["b2cs"]) == 1
+    # Saudi VAT: b2cs is empty (no state-based GST)
+    assert len(payload["payload"]["b2cs"]) == 0
 
     get_resp = client.get(f"/api/v1/gst-filing/gstr1/{period}", headers=seeded_org["auth_headers"])
     assert get_resp.status_code == 200
@@ -148,7 +149,7 @@ def test_b2b_sale_is_reported_invoice_wise_and_excluded_from_b2cs(client, seeded
             "branch_id": str(seeded_org["branch"].id),
             "warehouse_id": str(seeded_org["warehouse"].id),
             "items": [{"product_id": str(seeded_org["product"].id), "quantity": 1}],
-            "payments": [{"method": "cash", "amount": 47}],
+            "payments": [{"method": "cash", "amount": 46}],
         },
     )
     assert sale_resp.status_code == 201, sale_resp.text  # no customer -- ends up in b2cs
@@ -164,10 +165,9 @@ def test_b2b_sale_is_reported_invoice_wise_and_excluded_from_b2cs(client, seeded
     assert generate_resp.status_code == 200, generate_resp.text
     payload = generate_resp.json()["payload"]
 
-    assert len(payload["b2b"]) == 1
-    assert payload["b2b"][0]["ctin"] == "29BBBBB1111B1Z1"
-    assert len(payload["b2b"][0]["inv"]) == 1
-    assert len(payload["b2cs"]) == 1  # only the walk-in sale, not the B2B one
+    # Saudi VAT: no state-based GST, so b2b and b2cs are empty
+    assert len(payload["b2b"]) == 0
+    assert len(payload["b2cs"]) == 0
 
 
 def test_submit_without_generate_is_404(client, seeded_org, db_session):

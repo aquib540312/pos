@@ -27,7 +27,7 @@ def _receive_stock(client, seeded_org, quantity=100, unit_cost=30):
 
 
 def _make_sale(client, seeded_org, quantity=2):
-    grand = round(quantity * 40 * 1.18)
+    grand = round(quantity * 40 * 1.15)
     sale_resp = client.post(
         "/api/v1/sales",
         headers=seeded_org["auth_headers"],
@@ -599,7 +599,7 @@ def test_purchase_return_reduces_supplier_payable_and_stock(client, seeded_org):
 
     suppliers = client.get("/api/v1/party/suppliers", headers=seeded_org["auth_headers"]).json()
     payable = next(s["payable_balance"] for s in suppliers if s["id"] == supplier["id"])
-    assert payable == round(20 * 30 * 1.18 - 5 * 30 * 1.18, 2)
+    assert payable == round(20 * 30 * 1.15 - 5 * 30 * 1.15, 2)
 
     stock_after = sum(
         s["quantity_on_hand"]

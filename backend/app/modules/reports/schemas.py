@@ -9,10 +9,7 @@ class SalesSummaryResponse(BaseModel):
     period_end: date
     invoice_count: int
     total_taxable_value: float
-    total_cgst: float
-    total_sgst: float
-    total_igst: float
-    total_cess: float
+    total_vat: float
     total_grand_total: float
 
 
@@ -29,10 +26,7 @@ class GSTR1LineRow(BaseModel):
     hsn_code: str
     tax_rate_percent: float
     taxable_value: float
-    cgst: float
-    sgst: float
-    igst: float
-    cess: float
+    vat: float
     invoice_count: int
 
 
@@ -156,7 +150,7 @@ class StockLedgerRow(BaseModel):
 class DashboardResponse(BaseModel):
     today_invoice_count: int
     today_taxable_value: float
-    today_gst_total: float
+    today_vat_total: float
     today_grand_total: float
     today_cash_sales: float
     low_stock_count: int

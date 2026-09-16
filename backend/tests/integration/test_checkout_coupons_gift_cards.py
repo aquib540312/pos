@@ -31,7 +31,7 @@ def test_coupon_discount_reduces_grand_total(client, seeded_org):
     )
     assert coupon_resp.status_code == 201, coupon_resp.text
 
-    # 1 * 40 = 40 taxable, 18% => 7.2 tax => 47.2, minus 10 flat coupon => 37.2 -> 37
+    # 1 * 40 = 40 taxable, 15% => 6.0 tax => 46.0, minus 10 flat coupon => 36.0
     sale_resp = client.post(
         "/api/v1/sales",
         headers=seeded_org["auth_headers"],
@@ -39,7 +39,7 @@ def test_coupon_discount_reduces_grand_total(client, seeded_org):
             "branch_id": str(seeded_org["branch"].id),
             "warehouse_id": str(seeded_org["warehouse"].id),
             "items": [{"product_id": str(seeded_org["product"].id), "quantity": 1}],
-            "payments": [{"method": "cash", "amount": 37}],
+            "payments": [{"method": "cash", "amount": 36}],
             "coupon_code": "SAVE10",
         },
     )
@@ -47,7 +47,7 @@ def test_coupon_discount_reduces_grand_total(client, seeded_org):
     invoice = sale_resp.json()
     assert invoice["coupon_code"] == "SAVE10"
     assert invoice["coupon_discount_amount"] == 10.0
-    assert invoice["grand_total"] == 37.0
+    assert invoice["grand_total"] == 36.0
 
 
 def test_coupon_redemption_count_increments(client, seeded_org, db_session):
@@ -72,7 +72,7 @@ def test_coupon_redemption_count_increments(client, seeded_org, db_session):
             "branch_id": str(seeded_org["branch"].id),
             "warehouse_id": str(seeded_org["warehouse"].id),
             "items": [{"product_id": str(seeded_org["product"].id), "quantity": 1}],
-            "payments": [{"method": "cash", "amount": 42}],
+            "payments": [{"method": "cash", "amount": 41}],
             "coupon_code": "ONESHOT",
         },
     )
@@ -85,7 +85,7 @@ def test_coupon_redemption_count_increments(client, seeded_org, db_session):
             "branch_id": str(seeded_org["branch"].id),
             "warehouse_id": str(seeded_org["warehouse"].id),
             "items": [{"product_id": str(seeded_org["product"].id), "quantity": 1}],
-            "payments": [{"method": "cash", "amount": 47}],
+            "payments": [{"method": "cash", "amount": 46}],
             "coupon_code": "ONESHOT",
         },
     )
@@ -113,7 +113,7 @@ def test_coupon_below_minimum_order_value_is_rejected(client, seeded_org):
             "branch_id": str(seeded_org["branch"].id),
             "warehouse_id": str(seeded_org["warehouse"].id),
             "items": [{"product_id": str(seeded_org["product"].id), "quantity": 1}],
-            "payments": [{"method": "cash", "amount": 47}],
+            "payments": [{"method": "cash", "amount": 46}],
             "coupon_code": "BIG100",
         },
     )
@@ -129,7 +129,7 @@ def test_unknown_coupon_code_is_rejected(client, seeded_org):
             "branch_id": str(seeded_org["branch"].id),
             "warehouse_id": str(seeded_org["warehouse"].id),
             "items": [{"product_id": str(seeded_org["product"].id), "quantity": 1}],
-            "payments": [{"method": "cash", "amount": 47}],
+            "payments": [{"method": "cash", "amount": 46}],
             "coupon_code": "DOES-NOT-EXIST",
         },
     )
@@ -146,7 +146,7 @@ def test_gift_card_redemption_covers_part_of_the_bill(client, seeded_org, db_ses
     )
     assert card_resp.status_code == 201, card_resp.text
 
-    # 1 * 40 = 40 taxable, 18% => 7.2 tax => 47.2 -> 47; redeem 20 from gift card, pay 27 cash
+    # 1 * 40 = 40 taxable, 15% => 6.0 tax => 46.0; redeem 20 from gift card, pay 26 cash
     sale_resp = client.post(
         "/api/v1/sales",
         headers=seeded_org["auth_headers"],
@@ -154,16 +154,16 @@ def test_gift_card_redemption_covers_part_of_the_bill(client, seeded_org, db_ses
             "branch_id": str(seeded_org["branch"].id),
             "warehouse_id": str(seeded_org["warehouse"].id),
             "items": [{"product_id": str(seeded_org["product"].id), "quantity": 1}],
-            "payments": [{"method": "cash", "amount": 27}],
+            "payments": [{"method": "cash", "amount": 26}],
             "gift_card_number": "GC-100",
             "gift_card_amount": 20,
         },
     )
     assert sale_resp.status_code == 201, sale_resp.text
     invoice = sale_resp.json()
-    assert invoice["grand_total"] == 47.0
+    assert invoice["grand_total"] == 46.0
     methods = {p["method"]: p["amount"] for p in invoice["payments"]}
-    assert methods == {"cash": 27.0, "gift_card": 20.0}
+    assert methods == {"cash": 26.0, "gift_card": 20.0}
 
     from app.models.loyalty import GiftCard
 
@@ -186,7 +186,7 @@ def test_gift_card_insufficient_balance_is_rejected(client, seeded_org):
             "branch_id": str(seeded_org["branch"].id),
             "warehouse_id": str(seeded_org["warehouse"].id),
             "items": [{"product_id": str(seeded_org["product"].id), "quantity": 1}],
-            "payments": [{"method": "cash", "amount": 47}],
+            "payments": [{"method": "cash", "amount": 46}],
             "gift_card_number": "GC-LOW",
             "gift_card_amount": 20,
         },

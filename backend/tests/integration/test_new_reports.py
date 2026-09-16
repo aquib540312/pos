@@ -43,7 +43,7 @@ def _today_range():
 
 def test_top_products_ranks_by_revenue(client, seeded_org):
     _receive_stock(client, seeded_org, quantity=100)
-    _sell(client, seeded_org, quantity=3, amount=142)  # 3*40=120 taxable, 18% => 21.6 -> 141.6 -> 142
+    _sell(client, seeded_org, quantity=3, amount=138)  # 3*40=120 taxable, 15% => 18 -> 138
 
     start, end = _today_range()
     resp = client.get(
@@ -56,12 +56,12 @@ def test_top_products_ranks_by_revenue(client, seeded_org):
     assert rows[0]["quantity_sold"] == 3.0
     # Sum of line_total, not grand_total -- the invoice-level round_off
     # adjustment isn't distributed back onto individual line items.
-    assert rows[0]["revenue"] == 141.6
+    assert rows[0]["revenue"] == 138.0
 
 
 def test_top_products_respects_limit(client, seeded_org):
     _receive_stock(client, seeded_org, quantity=100)
-    _sell(client, seeded_org, quantity=1, amount=47)
+    _sell(client, seeded_org, quantity=1, amount=46)
 
     start, end = _today_range()
     resp = client.get(
@@ -75,9 +75,9 @@ def test_top_products_respects_limit(client, seeded_org):
 
 def test_payment_breakdown_groups_by_method(client, seeded_org):
     _receive_stock(client, seeded_org, quantity=100)
-    _sell(client, seeded_org, quantity=1, amount=47, method="cash")
-    _sell(client, seeded_org, quantity=1, amount=47, method="upi")
-    _sell(client, seeded_org, quantity=1, amount=47, method="upi")
+    _sell(client, seeded_org, quantity=1, amount=46, method="cash")
+    _sell(client, seeded_org, quantity=1, amount=46, method="card")
+    _sell(client, seeded_org, quantity=1, amount=46, method="card")
 
     start, end = _today_range()
     resp = client.get(
@@ -86,9 +86,9 @@ def test_payment_breakdown_groups_by_method(client, seeded_org):
     assert resp.status_code == 200, resp.text
     by_method = {row["method"]: row for row in resp.json()}
     assert by_method["cash"]["payment_count"] == 1
-    assert by_method["cash"]["total_amount"] == 47.0
-    assert by_method["upi"]["payment_count"] == 2
-    assert by_method["upi"]["total_amount"] == 94.0
+    assert by_method["cash"]["total_amount"] == 46.0
+    assert by_method["card"]["payment_count"] == 2
+    assert by_method["card"]["total_amount"] == 92.0
 
 
 def test_sales_by_cashier_attributes_to_shift_user(client, seeded_org):
@@ -102,8 +102,8 @@ def test_sales_by_cashier_attributes_to_shift_user(client, seeded_org):
     assert shift_resp.status_code == 201, shift_resp.text
     shift_id = shift_resp.json()["id"]
 
-    _sell(client, seeded_org, quantity=1, amount=47, shift_id=shift_id)
-    _sell(client, seeded_org, quantity=2, amount=94, shift_id=shift_id)
+    _sell(client, seeded_org, quantity=1, amount=46, shift_id=shift_id)
+    _sell(client, seeded_org, quantity=2, amount=92, shift_id=shift_id)
 
     start, end = _today_range()
     resp = client.get(
@@ -114,12 +114,12 @@ def test_sales_by_cashier_attributes_to_shift_user(client, seeded_org):
     assert len(rows) == 1
     assert rows[0]["user_id"] == str(seeded_org["admin"].id)
     assert rows[0]["invoice_count"] == 2
-    assert rows[0]["total_grand_total"] == 141.0
+    assert rows[0]["total_grand_total"] == 138.0
 
 
 def test_sales_by_cashier_excludes_invoices_without_a_shift(client, seeded_org):
     _receive_stock(client, seeded_org, quantity=100)
-    _sell(client, seeded_org, quantity=1, amount=47)  # no shift_id
+    _sell(client, seeded_org, quantity=1, amount=46)  # no shift_id
 
     start, end = _today_range()
     resp = client.get(

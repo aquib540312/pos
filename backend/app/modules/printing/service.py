@@ -93,9 +93,7 @@ def invoice_to_print_payload(invoice, product_names: dict, business: dict | None
             for item in invoice.items
         ],
         "taxable_total": float(invoice.taxable_total),
-        "cgst_total": float(invoice.cgst_total),
-        "sgst_total": float(invoice.sgst_total),
-        "igst_total": float(invoice.igst_total),
+        "vat_total": float(invoice.vat_total),
         "coupon_code": invoice.coupon_code,
         "coupon_discount_amount": float(invoice.coupon_discount_amount),
         "round_off": float(invoice.round_off),

@@ -46,10 +46,7 @@ class ReportService:
         stmt = select(
             func.count(SalesInvoice.id),
             func.coalesce(func.sum(SalesInvoice.taxable_total), 0),
-            func.coalesce(func.sum(SalesInvoice.cgst_total), 0),
-            func.coalesce(func.sum(SalesInvoice.sgst_total), 0),
-            func.coalesce(func.sum(SalesInvoice.igst_total), 0),
-            func.coalesce(func.sum(SalesInvoice.cess_total), 0),
+            func.coalesce(func.sum(SalesInvoice.vat_total), 0),
             func.coalesce(func.sum(SalesInvoice.grand_total), 0),
         ).where(
             SalesInvoice.organization_id == organization_id,
@@ -57,16 +54,13 @@ class ReportService:
             SalesInvoice.invoice_date >= start_dt,
             SalesInvoice.invoice_date <= end_dt,
         )
-        count, taxable, cgst, sgst, igst, cess, grand = self.db.execute(stmt).one()
+        count, taxable, vat, grand = self.db.execute(stmt).one()
         return SalesSummaryResponse(
             period_start=start,
             period_end=end,
             invoice_count=count,
             total_taxable_value=float(taxable),
-            total_cgst=float(cgst),
-            total_sgst=float(sgst),
-            total_igst=float(igst),
-            total_cess=float(cess),
+            total_vat=float(vat),
             total_grand_total=float(grand),
         )
 
@@ -109,10 +103,7 @@ class ReportService:
                 HSNCode.code,
                 SalesInvoiceItem.tax_rate_percent,
                 func.sum(SalesInvoiceItem.taxable_value),
-                func.sum(SalesInvoiceItem.cgst_amount),
-                func.sum(SalesInvoiceItem.sgst_amount),
-                func.sum(SalesInvoiceItem.igst_amount),
-                func.sum(SalesInvoiceItem.cess_amount),
+                func.sum(SalesInvoiceItem.vat_amount),
                 func.count(func.distinct(SalesInvoiceItem.invoice_id)),
             )
             .join(SalesInvoice, SalesInvoice.id == SalesInvoiceItem.invoice_id)
@@ -130,125 +121,27 @@ class ReportService:
                 hsn_code=hsn_code,
                 tax_rate_percent=float(rate),
                 taxable_value=float(taxable),
-                cgst=float(cgst),
-                sgst=float(sgst),
-                igst=float(igst),
-                cess=float(cess),
+                vat=float(vat),
                 invoice_count=count,
             )
-            for hsn_code, rate, taxable, cgst, sgst, igst, cess, count in self.db.execute(stmt).all()
+            for hsn_code, rate, taxable, vat, count in self.db.execute(stmt).all()
         ]
 
     def gstr1_b2cs_summary(self, organization_id: uuid.UUID, start: date, end: date) -> list[B2CSLine]:
         """GSTR-1 Table 7 (B2C small) grouping: by place of supply, intra-
         vs inter-state, and rate. Only sales with no buyer GSTIN captured
         (walk-in/unregistered consumers) belong here -- registered-buyer
-        sales are reported invoice-wise instead, see `gstr1_b2b_summary`."""
-        start_dt, end_dt = ist_range_bounds_utc(start, end)
-        stmt = (
-            select(
-                SalesInvoice.place_of_supply_state_code,
-                SalesInvoice.is_inter_state,
-                SalesInvoiceItem.tax_rate_percent,
-                func.sum(SalesInvoiceItem.taxable_value),
-                func.sum(SalesInvoiceItem.cgst_amount),
-                func.sum(SalesInvoiceItem.sgst_amount),
-                func.sum(SalesInvoiceItem.igst_amount),
-                func.sum(SalesInvoiceItem.cess_amount),
-            )
-            .join(SalesInvoice, SalesInvoice.id == SalesInvoiceItem.invoice_id)
-            .where(
-                SalesInvoice.organization_id == organization_id,
-                SalesInvoice.status == "posted",
-                SalesInvoice.invoice_date >= start_dt,
-                SalesInvoice.invoice_date <= end_dt,
-                SalesInvoice.customer_gstin.is_(None),
-            )
-            .group_by(SalesInvoice.place_of_supply_state_code, SalesInvoice.is_inter_state, SalesInvoiceItem.tax_rate_percent)
-        )
-        return [
-            B2CSLine(
-                place_of_supply_state_code=pos,
-                is_inter_state=is_inter_state,
-                tax_rate_percent=float(rate),
-                taxable_value=float(taxable),
-                cgst=float(cgst),
-                sgst=float(sgst),
-                igst=float(igst),
-                cess=float(cess),
-            )
-            for pos, is_inter_state, rate, taxable, cgst, sgst, igst, cess in self.db.execute(stmt).all()
-        ]
+        sales are reported invoice-wise instead, see `gstr1_b2b_summary`.
+        Returns empty list for Saudi VAT (no state-based GST)."""
+        return []
 
     def gstr1_b2b_summary(self, organization_id: uuid.UUID, start: date, end: date) -> list[B2BInvoiceLine]:
         """GSTR-1 Table 4 (B2B), invoice-wise: every sale with a buyer
         GSTIN captured at posting time, one entry per invoice with a
         rate-item per distinct tax rate on that invoice (an invoice can
-        mix rates, e.g. 5% and 18% products in the same cart)."""
-        start_dt, end_dt = ist_range_bounds_utc(start, end)
-        stmt = (
-            select(
-                SalesInvoice.id,
-                SalesInvoice.customer_gstin,
-                SalesInvoice.invoice_number,
-                SalesInvoice.business_date,
-                SalesInvoice.grand_total,
-                SalesInvoice.place_of_supply_state_code,
-                SalesInvoice.is_inter_state,
-                SalesInvoiceItem.tax_rate_percent,
-                func.sum(SalesInvoiceItem.taxable_value),
-                func.sum(SalesInvoiceItem.cgst_amount),
-                func.sum(SalesInvoiceItem.sgst_amount),
-                func.sum(SalesInvoiceItem.igst_amount),
-                func.sum(SalesInvoiceItem.cess_amount),
-            )
-            .join(SalesInvoice, SalesInvoice.id == SalesInvoiceItem.invoice_id)
-            .where(
-                SalesInvoice.organization_id == organization_id,
-                SalesInvoice.status == "posted",
-                SalesInvoice.invoice_date >= start_dt,
-                SalesInvoice.invoice_date <= end_dt,
-                SalesInvoice.customer_gstin.is_not(None),
-            )
-            .group_by(
-                SalesInvoice.id,
-                SalesInvoice.customer_gstin,
-                SalesInvoice.invoice_number,
-                SalesInvoice.business_date,
-                SalesInvoice.grand_total,
-                SalesInvoice.place_of_supply_state_code,
-                SalesInvoice.is_inter_state,
-                SalesInvoiceItem.tax_rate_percent,
-            )
-            .order_by(SalesInvoice.invoice_number)
-        )
-
-        invoices: dict[uuid.UUID, B2BInvoiceLine] = {}
-        for (
-            invoice_id, gstin, invoice_number, invoice_date, grand_total, pos, is_inter_state,
-            rate, taxable, cgst, sgst, igst, cess,
-        ) in self.db.execute(stmt).all():
-            rate_item = B2BInvoiceRateItem(
-                tax_rate_percent=float(rate),
-                taxable_value=float(taxable),
-                cgst=float(cgst),
-                sgst=float(sgst),
-                igst=float(igst),
-                cess=float(cess),
-            )
-            if invoice_id not in invoices:
-                invoices[invoice_id] = B2BInvoiceLine(
-                    buyer_gstin=gstin,
-                    invoice_number=invoice_number,
-                    invoice_date=invoice_date.strftime("%d-%m-%Y"),
-                    invoice_value=float(grand_total),
-                    place_of_supply_state_code=pos,
-                    is_inter_state=is_inter_state,
-                    rate_items=[rate_item],
-                )
-            else:
-                invoices[invoice_id].rate_items.append(rate_item)
-        return list(invoices.values())
+        mix rates, e.g. 5% and 18% products in the same cart).
+        Returns empty list for Saudi VAT (no state-based GST)."""
+        return []
 
     def gross_turnover(self, organization_id: uuid.UUID, start: date, end: date) -> float:
         start_dt, end_dt = ist_range_bounds_utc(start, end)
@@ -569,7 +462,7 @@ class ReportService:
         stmt = select(
             func.count(SalesInvoice.id),
             func.coalesce(func.sum(SalesInvoice.taxable_total), 0),
-            func.coalesce(func.sum(SalesInvoice.cgst_total + SalesInvoice.sgst_total + SalesInvoice.igst_total), 0),
+            func.coalesce(func.sum(SalesInvoice.vat_total), 0),
             func.coalesce(func.sum(SalesInvoice.grand_total), 0),
         ).where(
             SalesInvoice.organization_id == organization_id,
@@ -613,7 +506,7 @@ class ReportService:
         return DashboardResponse(
             today_invoice_count=inv_count,
             today_taxable_value=float(taxable),
-            today_gst_total=float(gst),
+            today_vat_total=float(gst),
             today_grand_total=float(grand),
             today_cash_sales=float(cash_sales),
             low_stock_count=low_count,

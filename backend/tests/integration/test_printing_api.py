@@ -24,7 +24,7 @@ def _complete_sale(client, seeded_org):
             "branch_id": str(seeded_org["branch"].id),
             "warehouse_id": str(seeded_org["warehouse"].id),
             "items": [{"product_id": str(seeded_org["product"].id), "quantity": 1}],
-            "payments": [{"method": "cash", "amount": 47}],
+            "payments": [{"method": "cash", "amount": 46}],
         },
     )
     assert sale_resp.status_code == 201, sale_resp.text

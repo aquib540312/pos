@@ -10,7 +10,7 @@ from app.core.exceptions import NotFoundError, ValidationError
 from app.models.gst_filing import GSTR1Filing
 from app.modules.gst_filing.adapters import GSPAdapter, get_gsp_adapter
 from app.modules.gst_filing.repository import GSTR1FilingRepository
-from app.modules.gst_filing.schema_builder import build_gstr1_json
+from app.modules.gst_filing.schema_builder import HSNSummaryLine, build_gstr1_json
 from app.modules.reports.service import ReportService
 
 
@@ -36,7 +36,17 @@ class GSTFilingService:
 
     def generate_gstr1(self, organization_id: uuid.UUID, return_period: str, gstin: str) -> GSTR1Filing:
         start, end = parse_return_period(return_period)
-        hsn_lines = self.reports.gstr1_summary(organization_id, start, end)
+        gstr1_rows = self.reports.gstr1_summary(organization_id, start, end)
+        hsn_lines = [
+            HSNSummaryLine(
+                hsn_code=row.hsn_code,
+                tax_rate_percent=row.tax_rate_percent,
+                taxable_value=row.taxable_value,
+                vat=row.vat,
+                invoice_count=row.invoice_count,
+            )
+            for row in gstr1_rows
+        ]
         b2cs_lines = self.reports.gstr1_b2cs_summary(organization_id, start, end)
         b2b_lines = self.reports.gstr1_b2b_summary(organization_id, start, end)
         gross_turnover = self.reports.gross_turnover(organization_id, start, end)

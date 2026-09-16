@@ -124,11 +124,11 @@ def test_convert_quotation_to_sale_creates_invoice_and_deducts_stock(client, see
     convert_resp = client.post(
         f"/api/v1/sales/quotations/{quotation['id']}/convert",
         headers=seeded_org["auth_headers"],
-        json={"warehouse_id": str(seeded_org["warehouse"].id), "payments": [{"method": "cash", "amount": 94}]},
+        json={"warehouse_id": str(seeded_org["warehouse"].id), "payments": [{"method": "cash", "amount": 92}]},
     )
     assert convert_resp.status_code == 201, convert_resp.text
     invoice = convert_resp.json()
-    assert invoice["grand_total"] == 94.0  # 2 x 40 = 80 taxable, +18% GST = 94.4 -> rounds to 94
+    assert invoice["grand_total"] == 92.0  # 2 x 40 = 80 taxable, +15% VAT = 92
 
     quotation_after = client.get(
         f"/api/v1/sales/quotations/{quotation['id']}", headers=seeded_org["auth_headers"]
@@ -148,13 +148,13 @@ def test_convert_already_converted_quotation_rejected(client, seeded_org):
     client.post(
         f"/api/v1/sales/quotations/{quotation['id']}/convert",
         headers=seeded_org["auth_headers"],
-        json={"warehouse_id": str(seeded_org["warehouse"].id), "payments": [{"method": "cash", "amount": 94}]},
+        json={"warehouse_id": str(seeded_org["warehouse"].id), "payments": [{"method": "cash", "amount": 92}]},
     )
 
     second = client.post(
         f"/api/v1/sales/quotations/{quotation['id']}/convert",
         headers=seeded_org["auth_headers"],
-        json={"warehouse_id": str(seeded_org["warehouse"].id), "payments": [{"method": "cash", "amount": 94}]},
+        json={"warehouse_id": str(seeded_org["warehouse"].id), "payments": [{"method": "cash", "amount": 92}]},
     )
     assert second.status_code == 409
 
@@ -165,6 +165,6 @@ def test_convert_expired_quotation_rejected(client, seeded_org):
     resp = client.post(
         f"/api/v1/sales/quotations/{quotation['id']}/convert",
         headers=seeded_org["auth_headers"],
-        json={"warehouse_id": str(seeded_org["warehouse"].id), "payments": [{"method": "cash", "amount": 94}]},
+        json={"warehouse_id": str(seeded_org["warehouse"].id), "payments": [{"method": "cash", "amount": 92}]},
     )
     assert resp.status_code == 422

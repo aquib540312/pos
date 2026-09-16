@@ -53,12 +53,8 @@ def render_receipt(printer: EscposPrinter, invoice: dict) -> None:
 
     printer.text("-" * 32 + "\n")
     _line(printer, "Taxable value", invoice["taxable_total"])
-    if invoice["cgst_total"]:
-        _line(printer, "CGST", invoice["cgst_total"])
-    if invoice["sgst_total"]:
-        _line(printer, "SGST", invoice["sgst_total"])
-    if invoice["igst_total"]:
-        _line(printer, "IGST", invoice["igst_total"])
+    if invoice.get("vat_total"):
+        _line(printer, "VAT (15%)", invoice["vat_total"])
     if invoice.get("coupon_discount_amount"):
         _line(printer, f"Coupon ({invoice.get('coupon_code', '')})", -invoice["coupon_discount_amount"])
     _line(printer, "Round off", invoice["round_off"])
@@ -105,6 +101,6 @@ def _split_long_line(text: str, width: int = 32) -> list[str]:
 
 
 def _line(printer: EscposPrinter, label: str, amount: float) -> None:
-    amount_str = f"Rs.{amount:.2f}"
+    amount_str = f"SAR.{amount:.2f}"
     padding = max(1, 32 - len(label) - len(amount_str))
     printer.text(f"{label}{' ' * padding}{amount_str}\n")
