@@ -59,7 +59,7 @@ const ITEM_STATUS_STYLES: Record<DiningOrderItem['status'], string> = {
 }
 
 function inr(value: number): string {
-  return `₹${value.toFixed(2)}`
+  return `SAR ${value.toFixed(2)}`
 }
 
 export default function RestaurantMenuPage() {
@@ -457,7 +457,7 @@ const tableMap = useMemo(() => {
   const pendingCount = order?.items.filter((i) => i.status === 'pending').length ?? 0
   const readyCount = order?.items.filter((i) => i.status === 'ready').length ?? 0
   const preparingCount = order?.items.filter((i) => i.status === 'preparing').length ?? 0
-  const taxTotal = (estimate?.cgst_total ?? 0) + (estimate?.sgst_total ?? 0) + (estimate?.igst_total ?? 0)
+  const taxTotal = estimate?.vat_total ?? 0
   const canSettle = !!order && !!estimate && estimate.grand_total > 0 && order.status === 'open'
 
   function gradientFor(index: number): string {

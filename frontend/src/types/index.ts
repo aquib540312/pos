@@ -175,7 +175,7 @@ export interface CartLine {
 }
 
 export interface PaymentLine {
-  method: 'cash' | 'card' | 'upi' | 'wallet' | 'credit'
+  method: 'cash' | 'card' | 'bank_transfer' | 'credit' | 'split'
   amount: number
   reference?: string
 }
@@ -188,10 +188,7 @@ export interface SaleInvoiceItem {
   discount_amount: number
   taxable_value: number
   tax_rate_percent: number
-  cgst_amount: number
-  sgst_amount: number
-  igst_amount: number
-  cess_amount: number
+  vat_amount: number
   line_total: number
 }
 
@@ -252,10 +249,7 @@ export interface SalesSummaryReport {
   period_end: string
   invoice_count: number
   total_taxable_value: number
-  total_cgst: number
-  total_sgst: number
-  total_igst: number
-  total_cess: number
+  total_vat: number
   total_grand_total: number
 }
 
@@ -272,10 +266,7 @@ export interface GSTR1ReportRow {
   hsn_code: string
   tax_rate_percent: number
   taxable_value: number
-  cgst: number
-  sgst: number
-  igst: number
-  cess: number
+  vat: number
   invoice_count: number
 }
 
@@ -333,14 +324,10 @@ export interface SaleInvoice {
   invoice_date: string
   branch_id: string
   customer_id: string | null
-  is_inter_state: boolean
   subtotal: number
   discount_total: number
   taxable_total: number
-  cgst_total: number
-  sgst_total: number
-  igst_total: number
-  cess_total: number
+  vat_total: number
   round_off: number
   grand_total: number
   is_credit_sale: boolean
@@ -378,9 +365,7 @@ export interface SalesReturnItem {
   original_invoice_item_id: string
   quantity: number
   taxable_value: number
-  cgst_amount: number
-  sgst_amount: number
-  igst_amount: number
+  vat_amount: number
   line_total: number
 }
 
@@ -437,7 +422,7 @@ export interface GiftCard {
 export interface DashboardStats {
   today_invoice_count: number
   today_taxable_value: number
-  today_gst_total: number
+  today_vat_total: number
   today_grand_total: number
   today_cash_sales: number
   low_stock_count: number
@@ -512,9 +497,7 @@ export interface PurchaseReturnItem {
   quantity: number
   unit_cost: number
   taxable_value: number
-  cgst_amount: number
-  sgst_amount: number
-  igst_amount: number
+  vat_amount: number
   line_total: number
 }
 
@@ -545,9 +528,7 @@ export interface OrgProfile {
   id: string
   legal_name: string
   trade_name: string
-  gstin: string | null
-  pan: string | null
-  default_state_code: string
+  vat_number: string | null
   phone: string | null
   address: string | null
   footer_note: string | null
@@ -601,10 +582,7 @@ export interface DiningOrderEstimate {
   subtotal: number
   taxable_total: number
   discount_total: number
-  cgst_total: number
-  sgst_total: number
-  igst_total: number
-  cess_total: number
+  vat_total: number
   round_off: number
   grand_total: number
   items: DiningOrderItem[]

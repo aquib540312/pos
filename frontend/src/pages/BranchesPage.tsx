@@ -29,7 +29,7 @@ export default function BranchesPage() {
     name: '',
     business_type: 'grocery',
     state_code: '',
-    gstin: '',
+    vat_number: '',
     address: '',
   })
   const [warehouseFormFor, setWarehouseFormFor] = useState<string | null>(null)
@@ -54,10 +54,10 @@ export default function BranchesPage() {
         name: branchForm.name,
         business_type: branchForm.business_type,
         state_code: branchForm.state_code,
-        gstin: branchForm.gstin || null,
+        vat_number: branchForm.vat_number || null,
         address: branchForm.address || null,
       })
-      setBranchForm({ code: '', name: '', business_type: 'grocery', state_code: '', gstin: '', address: '' })
+      setBranchForm({ code: '', name: '', business_type: 'grocery', state_code: '', vat_number: '', address: '' })
       setShowBranchForm(false)
       await refresh()
     } catch (err) {
@@ -137,9 +137,9 @@ export default function BranchesPage() {
             className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100"
           />
           <input
-            placeholder="GSTIN (optional)"
-            value={branchForm.gstin}
-            onChange={(e) => setBranchForm({ ...branchForm, gstin: e.target.value })}
+            placeholder="VAT Number (optional)"
+            value={branchForm.vat_number}
+            onChange={(e) => setBranchForm({ ...branchForm, vat_number: e.target.value })}
             className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100"
           />
           <input

@@ -20,9 +20,9 @@ export default function DashboardPage() {
 
   const cards = [
     { label: "Today's Invoices", value: stats?.today_invoice_count ?? '—' },
-    { label: 'Taxable Value', value: stats ? `₹${stats.today_taxable_value.toFixed(2)}` : '—' },
-    { label: 'GST Collected', value: stats ? `₹${stats.today_gst_total.toFixed(2)}` : '—' },
-    { label: 'Grand Total', value: stats ? `₹${stats.today_grand_total.toFixed(2)}` : '—' },
+    { label: 'Taxable Value', value: stats ? `SAR ${stats.today_taxable_value.toFixed(2)}` : '—' },
+    { label: 'VAT Collected', value: stats ? `SAR ${stats.today_vat_total.toFixed(2)}` : '—' },
+    { label: 'Grand Total', value: stats ? `SAR ${stats.today_grand_total.toFixed(2)}` : '—' },
     {
       label: 'Low Stock Items',
       value: stats?.low_stock_count ?? '—',
@@ -33,7 +33,7 @@ export default function DashboardPage() {
       value: stats?.expiring_soon_count ?? '—',
       warn: Boolean(stats && stats.expiring_soon_count > 0),
     },
-    { label: 'Open Credit', value: stats ? `₹${stats.open_credit_outstanding.toFixed(2)}` : '—' },
+    { label: 'Open Credit', value: stats ? `SAR ${stats.open_credit_outstanding.toFixed(2)}` : '—' },
   ]
 
   return (

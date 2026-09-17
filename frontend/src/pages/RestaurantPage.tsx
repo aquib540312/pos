@@ -66,7 +66,7 @@ const ITEM_STATUS_STYLES: Record<DiningOrderItem['status'], string> = {
 }
 
 function inr(value: number): string {
-  return `₹${value.toFixed(2)}`
+  return `SAR ${value.toFixed(2)}`
 }
 
 function elapsedMinutes(openedAt: string): number {
@@ -511,7 +511,7 @@ export default function RestaurantPage() {
   const servedItems = order?.items.filter((i) => i.status === 'served') ?? []
   const cancelledItems = order?.items.filter((i) => i.status === 'cancelled') ?? []
   const activeItems = order?.items.filter((i) => i.status !== 'cancelled') ?? []
-  const taxTotal = (estimate?.cgst_total ?? 0) + (estimate?.sgst_total ?? 0) + (estimate?.igst_total ?? 0)
+  const taxTotal = estimate?.vat_total ?? 0
 
   const totalPaid = payments.reduce((s, p) => s + p.amount, 0)
   const cashChange = payments

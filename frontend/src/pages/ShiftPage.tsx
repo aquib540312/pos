@@ -153,15 +153,15 @@ export default function ShiftPage() {
             </div>
             <div className="flex justify-between">
               <dt>Opening cash</dt>
-              <dd>₹{current.opening_cash.toFixed(2)}</dd>
+              <dd>SAR {current.opening_cash.toFixed(2)}</dd>
             </div>
             <div className="flex justify-between">
               <dt>Cash sales so far</dt>
-              <dd>₹{current.running_cash_sales.toFixed(2)}</dd>
+              <dd>SAR {current.running_cash_sales.toFixed(2)}</dd>
             </div>
             <div className="flex justify-between font-medium text-slate-900 dark:text-slate-100">
               <dt>Expected cash in drawer</dt>
-              <dd>₹{(current.opening_cash + current.running_cash_sales).toFixed(2)}</dd>
+              <dd>SAR {(current.opening_cash + current.running_cash_sales).toFixed(2)}</dd>
             </div>
           </dl>
           <form onSubmit={handleCloseShift}>
@@ -207,12 +207,12 @@ export default function ShiftPage() {
               <tr key={s.id} className="border-b border-slate-100 last:border-0 dark:border-slate-700">
                 <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{formatDateTime(s.opened_at)}</td>
                 <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{formatDateTime(s.closed_at)}</td>
-                <td className="px-4 py-3 text-slate-600 dark:text-slate-300">₹{s.opening_cash.toFixed(2)}</td>
+                <td className="px-4 py-3 text-slate-600 dark:text-slate-300">SAR {s.opening_cash.toFixed(2)}</td>
                 <td className="px-4 py-3 text-slate-600 dark:text-slate-300">
-                  {s.expected_closing_cash != null ? `₹${s.expected_closing_cash.toFixed(2)}` : '-'}
+                  {s.expected_closing_cash != null ? `SAR ${s.expected_closing_cash.toFixed(2)}` : '-'}
                 </td>
                 <td className="px-4 py-3 text-slate-600 dark:text-slate-300">
-                  {s.counted_closing_cash != null ? `₹${s.counted_closing_cash.toFixed(2)}` : '-'}
+                  {s.counted_closing_cash != null ? `SAR ${s.counted_closing_cash.toFixed(2)}` : '-'}
                 </td>
                 <td
                   className={`px-4 py-3 font-medium ${
@@ -225,7 +225,7 @@ export default function ShiftPage() {
                           : 'text-emerald-600 dark:text-emerald-400'
                   }`}
                 >
-                  {s.cash_variance != null ? `₹${s.cash_variance.toFixed(2)}` : '-'}
+                  {s.cash_variance != null ? `SAR ${s.cash_variance.toFixed(2)}` : '-'}
                 </td>
                 <td className="px-4 py-3">
                   <span

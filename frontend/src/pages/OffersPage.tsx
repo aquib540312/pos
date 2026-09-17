@@ -143,9 +143,9 @@ export default function OffersPage() {
                 <tr key={c.id} className="border-b border-slate-100 last:border-0 dark:border-slate-700">
                   <td className="px-4 py-3 font-mono font-medium text-slate-900 dark:text-slate-100">{c.code}</td>
                   <td className="px-4 py-3 text-slate-600 dark:text-slate-300">
-                    {c.discount_type === 'percent' ? `${c.discount_value}%` : `₹${c.discount_value.toFixed(2)}`}
+                    {c.discount_type === 'percent' ? `${c.discount_value}%` : `SAR ${c.discount_value.toFixed(2)}`}
                   </td>
-                  <td className="px-4 py-3 text-slate-600 dark:text-slate-300">₹{c.min_order_value.toFixed(2)}</td>
+                  <td className="px-4 py-3 text-slate-600 dark:text-slate-300">SAR {c.min_order_value.toFixed(2)}</td>
                   <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{c.times_redeemed}</td>
                   <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{c.max_redemptions ?? '∞'}</td>
                   <td className="px-4 py-3">
@@ -197,8 +197,8 @@ export default function OffersPage() {
               {giftCards.map((g) => (
                 <tr key={g.id} className="border-b border-slate-100 last:border-0 dark:border-slate-700">
                   <td className="px-4 py-3 font-mono font-medium text-slate-900 dark:text-slate-100">{g.card_number}</td>
-                  <td className="px-4 py-3 text-slate-600 dark:text-slate-300">₹{g.initial_value.toFixed(2)}</td>
-                  <td className="px-4 py-3 text-slate-900 dark:text-slate-100">₹{g.balance.toFixed(2)}</td>
+                  <td className="px-4 py-3 text-slate-600 dark:text-slate-300">SAR {g.initial_value.toFixed(2)}</td>
+                  <td className="px-4 py-3 text-slate-900 dark:text-slate-100">SAR {g.balance.toFixed(2)}</td>
                   <td className="px-4 py-3">
                     <span
                       className={`rounded-full px-2 py-0.5 text-xs font-medium ${
@@ -293,12 +293,12 @@ function CouponCreateForm({ onDone, onError }: { onDone: () => void; onError: (m
           <label className={labelCls}>Discount Type</label>
           <select value={discountType} onChange={(e) => setDiscountType(e.target.value as 'percent' | 'flat')} className={inputCls}>
             <option value="percent">Percent (%)</option>
-            <option value="flat">Flat (₹)</option>
+            <option value="flat">Flat (SAR)</option>
           </select>
         </div>
         <div>
           <label className={labelCls}>
-            {discountType === 'percent' ? 'Discount %' : 'Discount (₹)'}
+            {discountType === 'percent' ? 'Discount %' : 'Discount (SAR)'}
           </label>
           <input
             required
@@ -311,7 +311,7 @@ function CouponCreateForm({ onDone, onError }: { onDone: () => void; onError: (m
           />
         </div>
         <div>
-          <label className={labelCls}>Min Order Value (₹)</label>
+          <label className={labelCls}>Min Order Value (SAR)</label>
           <input type="number" min="0" step="0.01" value={minOrderValue} onChange={(e) => setMinOrderValue(e.target.value)} className={inputCls} />
         </div>
         <div>
@@ -392,7 +392,7 @@ function GiftCardCreateForm({ onDone, onError }: { onDone: () => void; onError: 
           <input required value={cardNumber} onChange={(e) => setCardNumber(e.target.value)} placeholder="GC-000001" className={inputCls} />
         </div>
         <div>
-          <label className={labelCls}>Initial Value (₹)</label>
+          <label className={labelCls}>Initial Value (SAR)</label>
           <input required type="number" min="1" step="0.01" value={initialValue} onChange={(e) => setInitialValue(e.target.value)} className={inputCls} />
         </div>
         <div>

@@ -12,7 +12,7 @@ export default function SettingsPage() {
   const [profileForm, setProfileForm] = useState({
     legal_name: '',
     trade_name: '',
-    gstin: '',
+    vat_number: '',
     pan: '',
     default_state_code: '',
     phone: '',
@@ -32,7 +32,7 @@ export default function SettingsPage() {
         setProfileForm({
           legal_name: data.legal_name ?? '',
           trade_name: data.trade_name ?? '',
-          gstin: data.gstin ?? '',
+          vat_number: data.vat_number ?? '',
           pan: data.pan ?? '',
           default_state_code: data.default_state_code ?? '',
           phone: data.phone ?? '',
@@ -82,9 +82,9 @@ export default function SettingsPage() {
       setProfileError('State code must be a 2-letter code, e.g. MH.')
       return
     }
-    const gstin = profileForm.gstin.trim()
-    if (gstin && !/^[0-9A-Z]{15}$/i.test(gstin)) {
-      setProfileError('GSTIN must be 15 alphanumeric characters.')
+    const vatNumber = profileForm.vat_number.trim()
+    if (vatNumber && vatNumber.length < 5) {
+      setProfileError('VAT number must be at least 5 characters.')
       return
     }
     const pan = profileForm.pan.trim()
@@ -97,7 +97,7 @@ export default function SettingsPage() {
       const { data } = await apiClient.patch<OrgProfile>('/org/profile', {
         legal_name: profileForm.legal_name.trim(),
         trade_name: profileForm.trade_name.trim() || null,
-        gstin: gstin || null,
+        gstin: vatNumber || null,
         pan: pan.toUpperCase() || null,
         default_state_code: profileForm.default_state_code.trim().toUpperCase(),
         phone: profileForm.phone.trim() || null,
@@ -142,7 +142,7 @@ export default function SettingsPage() {
       <div className="max-w-2xl rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800">
         <h2 className="mb-1 text-lg font-semibold text-slate-900 dark:text-slate-50">Business Profile</h2>
         <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
-          Used for tax invoices and printed receipts. The trade name, address and GSTIN below appear on every receipt.
+          Used for tax invoices and printed receipts. The trade name, address and VAT Number below appear on every receipt.
         </p>
         {profileError && <p className="mb-4 text-sm text-red-600 dark:text-red-400">{profileError}</p>}
         {profileMessage && <p className="mb-4 text-sm text-emerald-600 dark:text-emerald-400">{profileMessage}</p>}
@@ -180,8 +180,8 @@ export default function SettingsPage() {
             <input value={profileForm.trade_name} onChange={(e) => setProfileForm({ ...profileForm, trade_name: e.target.value })} className={inputClass} placeholder="Shown on receipts" />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">GSTIN</label>
-            <input value={profileForm.gstin} onChange={(e) => setProfileForm({ ...profileForm, gstin: e.target.value.toUpperCase() })} className={inputClass} maxLength={15} placeholder="15 characters" />
+            <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">VAT Number</label>
+            <input value={profileForm.vat_number} onChange={(e) => setProfileForm({ ...profileForm, vat_number: e.target.value })} className={inputClass} placeholder="VAT registration number" />
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">PAN</label>

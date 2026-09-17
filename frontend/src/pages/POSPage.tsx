@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { apiClient, apiErrorMessage } from '../api/client'
-import UpiQrPanel from '../components/UpiQrPanel'
 import type { CartLine, Customer, FeatureFlags, OrgProfile, PaymentGatewayTransaction, PaymentLine, Product, SaleInvoice } from '../types'
 
 interface Warehouse {
@@ -17,14 +16,14 @@ interface Branch {
   warehouses: Warehouse[]
 }
 
-const PAYMENT_METHODS: PaymentLine['method'][] = ['cash', 'card', 'upi', 'wallet']
+const PAYMENT_METHODS: PaymentLine['method'][] = ['cash', 'card', 'bank_transfer', 'credit']
 
-// Mirrors the backend's Decimal ROUND_HALF_UP (see gst/service.py) closely
+// Mirrors the backend's Decimal ROUND_HALF_UP (see vat/service.py) closely
 // enough for typical retail amounts, so the default payment amount we
 // suggest matches what the server will actually compute. The server
 // remains authoritative -- this is only a convenience default, and the
 // "Balance due" indicator will catch the rare sub-cent mismatch case
-// (component-level CGST/SGST rounding can differ from a single combined
+// (component-level VAT rounding can differ from a single combined
 // rounding by up to Re.0.01) before the cashier submits.
 function roundHalfUp(value: number, decimals: number): number {
   const factor = 10 ** decimals
@@ -48,9 +47,8 @@ export default function POSPage() {
   const barcodeRef = useRef<HTMLInputElement>(null)
 
   const [features, setFeatures] = useState<FeatureFlags | null>(null)
-  const [payMode, setPayMode] = useState<'manual' | 'upi_qr'>('manual')
   const [saleSessionId, setSaleSessionId] = useState(0)
-  // Guards against the UPI panel's onPaid firing more than once (e.g. a
+  // Guards against the payment panel's onPaid firing more than once (e.g. a
   // stray extra poll tick) from ever resulting in two POST /sales calls
   // for the same paid transaction.
   const finalizingRef = useRef(false)
@@ -136,11 +134,6 @@ export default function POSPage() {
 
   const paymentTotal = payments.reduce((sum, p) => sum + (Number.isFinite(p.amount) ? p.amount : 0), 0)
   const balanceDue = Math.max(0, estimate.grandTotalEstimate - paymentTotal)
-  const upiAmount = Math.max(0, estimate.grandTotalEstimate - (giftCardAmount || 0))
-  // Ties the QR's advisory receipt_reference to the current bill in
-  // progress, not to any prior completed sale -- regenerated whenever a
-  // sale finishes (resetForNewSale bumps saleSessionId).
-  const receiptReference = useMemo(() => `POS-${saleSessionId}-${Date.now()}`, [saleSessionId])
 
   async function searchProducts(q: string) {
     setBarcodeInput(q)
@@ -209,7 +202,6 @@ export default function POSPage() {
     setCouponError(null)
     setGiftCardNumber('')
     setGiftCardAmount(0)
-    setPayMode('manual')
     setSaleSessionId((id) => id + 1)
   }
 
@@ -315,7 +307,7 @@ export default function POSPage() {
                       {p.variant_label && <span className="ml-1 rounded bg-slate-200 px-1.5 py-0.5 text-xs dark:bg-slate-700">{p.variant_label}</span>}
                       {p.is_weighted && <span className="ml-1 text-xs text-indigo-500">weight</span>}
                     </span>
-                    <span className="font-medium">₹{p.sale_price.toFixed(2)}</span>
+                    <span className="font-medium">SAR {p.sale_price.toFixed(2)}</span>
                   </button>
                 </li>
               ))}
@@ -351,7 +343,7 @@ export default function POSPage() {
                         className="w-20 rounded border border-slate-300 px-2 py-1 dark:border-slate-600 dark:bg-slate-700"
                       />
                     </td>
-                    <td className="px-3 py-2 text-slate-600 dark:text-slate-300">₹{line.product.sale_price.toFixed(2)}</td>
+                    <td className="px-3 py-2 text-slate-600 dark:text-slate-300">SAR {line.product.sale_price.toFixed(2)}</td>
                     <td className="px-3 py-2">
                       <input
                         type="number"
@@ -362,7 +354,7 @@ export default function POSPage() {
                         className="w-20 rounded border border-slate-300 px-2 py-1 dark:border-slate-600 dark:bg-slate-700"
                       />
                     </td>
-                    <td className="px-3 py-2 font-medium">₹{lineTotal.toFixed(2)}</td>
+                    <td className="px-3 py-2 font-medium">SAR {lineTotal.toFixed(2)}</td>
                     <td className="px-3 py-2">
                       <button onClick={() => removeLine(line.product.id)} className="text-red-500 hover:text-red-600">✕</button>
                     </td>
@@ -428,7 +420,7 @@ export default function POSPage() {
           {appliedCoupon ? (
             <div className="flex items-center justify-between text-sm">
               <span className="text-emerald-600">
-                {appliedCoupon.code} applied (-₹{appliedCoupon.discount.toFixed(2)})
+                {appliedCoupon.code} applied (-SAR {appliedCoupon.discount.toFixed(2)})
               </span>
               <button
                 onClick={() => {
@@ -487,99 +479,72 @@ export default function POSPage() {
         <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-800">
           <h2 className="mb-2 text-sm font-semibold text-slate-700 dark:text-slate-300">Summary (estimate)</h2>
           <div className="space-y-1 text-sm text-slate-600 dark:text-slate-300">
-            <div className="flex justify-between"><span>Taxable value</span><span>₹{estimate.taxable.toFixed(2)}</span></div>
-            <div className="flex justify-between"><span>GST (approx.)</span><span>₹{estimate.tax.toFixed(2)}</span></div>
+            <div className="flex justify-between"><span>Taxable value</span><span>SAR {estimate.taxable.toFixed(2)}</span></div>
+            <div className="flex justify-between"><span>VAT (approx.)</span><span>SAR {estimate.tax.toFixed(2)}</span></div>
             {appliedCoupon && (
               <div className="flex justify-between text-emerald-600">
-                <span>Coupon discount</span><span>-₹{appliedCoupon.discount.toFixed(2)}</span>
+                <span>Coupon discount</span><span>-SAR {appliedCoupon.discount.toFixed(2)}</span>
               </div>
             )}
             <div className="flex justify-between border-t border-slate-200 pt-2 text-base font-semibold text-slate-900 dark:border-slate-700 dark:text-slate-50">
-              <span>Grand total (approx.)</span><span>₹{estimate.grandTotalEstimate.toFixed(2)}</span>
+              <span>Grand total (approx.)</span><span>SAR {estimate.grandTotalEstimate.toFixed(2)}</span>
             </div>
           </div>
-          <p className="mt-1 text-xs text-slate-400">Exact GST & rounding are calculated by the server at checkout.</p>
+          <p className="mt-1 text-xs text-slate-400">Exact VAT & rounding are calculated by the server at checkout.</p>
         </div>
 
         {!isCreditSale && (
           <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-800">
             <div className="mb-2 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Payment</h2>
-              {features?.razorpay_upi_enabled && (
-                <div className="flex overflow-hidden rounded-lg border border-slate-300 text-xs dark:border-slate-600">
-                  <button
-                    onClick={() => setPayMode('manual')}
-                    className={`px-2 py-1 ${payMode === 'manual' ? 'bg-slate-800 text-white' : 'text-slate-500'}`}
-                  >
-                    Manual
-                  </button>
-                  <button
-                    onClick={() => setPayMode('upi_qr')}
-                    className={`px-2 py-1 ${payMode === 'upi_qr' ? 'bg-slate-800 text-white' : 'text-slate-500'}`}
-                  >
-                    UPI QR
-                  </button>
-                </div>
-              )}
             </div>
 
-            {payMode === 'manual' ? (
-              <>
-                {payments.map((p, i) => (
-                  <div key={i} className="mb-2 flex gap-2">
-                    <select
-                      value={p.method}
-                      onChange={(e) => updatePayment(i, { method: e.target.value as PaymentLine['method'] })}
-                      className="rounded-lg border border-slate-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-700"
-                    >
-                      {PAYMENT_METHODS.map((m) => (
-                        <option key={m} value={m}>{m.toUpperCase()}</option>
-                      ))}
-                    </select>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={p.amount || ''}
-                      onChange={(e) => updatePayment(i, { amount: Number(e.target.value) })}
-                      className="w-24 rounded-lg border border-slate-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-700"
-                    />
-                    {payments.length > 1 && (
-                      <button onClick={() => setPayments((prev) => prev.filter((_, idx) => idx !== i))} className="text-red-500">✕</button>
-                    )}
-                  </div>
-                ))}
-                <button
-                  onClick={() => setPayments((prev) => [...prev, { method: 'cash', amount: 0 }])}
-                  className="text-sm font-medium text-indigo-600 hover:text-indigo-500"
-                >
-                  + Add payment method
-                </button>
-                <p className={`mt-2 text-sm ${balanceDue > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
-                  {balanceDue > 0 ? `Balance due: ₹${balanceDue.toFixed(2)}` : 'Fully paid'}
-                </p>
-              </>
-            ) : (
-              <UpiQrPanel
-                amount={upiAmount}
-                receiptReference={receiptReference}
-                disabled={cart.length === 0 || upiAmount <= 0}
-                onPaid={finalizeWithGatewayTransaction}
-              />
-            )}
+            <>
+              {payments.map((p, i) => (
+                <div key={i} className="mb-2 flex gap-2">
+                  <select
+                    value={p.method}
+                    onChange={(e) => updatePayment(i, { method: e.target.value as PaymentLine['method'] })}
+                    className="rounded-lg border border-slate-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-700"
+                  >
+                    {PAYMENT_METHODS.map((m) => (
+                      <option key={m} value={m}>{m.toUpperCase()}</option>
+                    ))}
+                  </select>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={p.amount || ''}
+                    onChange={(e) => updatePayment(i, { amount: Number(e.target.value) })}
+                    className="w-24 rounded-lg border border-slate-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-700"
+                  />
+                  {payments.length > 1 && (
+                    <button onClick={() => setPayments((prev) => prev.filter((_, idx) => idx !== i))} className="text-red-500">✕</button>
+                  )}
+                </div>
+              ))}
+              <button
+                onClick={() => setPayments((prev) => [...prev, { method: 'cash', amount: 0 }])}
+                className="text-sm font-medium text-indigo-600 hover:text-indigo-500"
+              >
+                + Add payment method
+              </button>
+              <p className={`mt-2 text-sm ${balanceDue > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                {balanceDue > 0 ? `Balance due: SAR ${balanceDue.toFixed(2)}` : 'Fully paid'}
+              </p>
+            </>
           </div>
         )}
 
         {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
-        {(isCreditSale || payMode === 'manual') && (
-          <button
-            onClick={completeSale}
-            disabled={submitting || cart.length === 0}
-            className="w-full rounded-lg bg-emerald-600 px-4 py-3 text-base font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
-          >
-            {submitting ? 'Processing...' : 'Complete Sale'}
-          </button>
-        )}
+        <button
+          onClick={completeSale}
+          disabled={submitting || cart.length === 0}
+          className="w-full rounded-lg bg-emerald-600 px-4 py-3 text-base font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+        >
+          {submitting ? 'Processing...' : 'Complete Sale'}
+        </button>
       </div>
     </div>
   )
@@ -609,12 +574,12 @@ function Receipt({
 
   // Sales rung up while the desktop shell can't reach the backend are
   // queued locally by sync_agent's local server and come back with this
-  // status instead of "posted" -- there's no real GST invoice yet (no
-  // cached tax rates to compute CGST/SGST/IGST from), just a provisional
+  // status instead of "posted" -- there's no real VAT invoice yet (no
+  // cached tax rates to compute VAT from), just a provisional
   // slip, until the sale syncs and the server posts the real one.
   const isOfflinePending = invoice.status === 'offline_pending'
 
-  // Org branding (trade name, address, GSTIN, logo, footer note) rides along
+  // Org branding (trade name, address, VAT number, logo, footer note) rides along
   // on the printed/dialog receipt so every till in the branch shares one look.
   // Fetched here instead of at the page level because this component is the
   // only consumer, and a 404/offline org profile shouldn't block the POS.
@@ -667,7 +632,7 @@ function Receipt({
       {isOfflinePending && (
         <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 print:hidden dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200">
           Offline sale — saved on this till and will sync automatically once connected. This is a provisional
-          receipt, not the final GST tax invoice; reprint the real one after it syncs.
+          receipt, not the final VAT tax invoice; reprint the real one after it syncs.
         </div>
       )}
       <div className="rounded-xl border border-slate-200 bg-white p-6 font-mono text-sm dark:border-slate-800 dark:bg-slate-800 print:w-[80mm] print:border-0 print:p-2 print:text-black">
@@ -677,38 +642,36 @@ function Receipt({
             <p className="text-center text-sm font-bold">{profile?.trade_name || profile?.legal_name}</p>
             {profile?.address && <p className="text-center text-xs whitespace-pre-line">{profile.address}</p>}
             {profile?.phone && <p className="text-center text-xs">Tel: {profile.phone}</p>}
-            {profile?.gstin && <p className="text-center text-xs">GSTIN: {profile.gstin}</p>}
+            {profile?.vat_number && <p className="text-center text-xs">VAT: {profile.vat_number}</p>}
             <hr className="my-2 border-dashed" />
           </>
         )}
         <p className="text-center text-base font-bold">{isOfflinePending ? 'PROVISIONAL RECEIPT' : 'TAX INVOICE'}</p>
         <p className="text-center text-xs">{invoice.invoice_number}</p>
-        <p className="text-center text-xs">{new Date(invoice.invoice_date).toLocaleString('en-IN')}</p>
+        <p className="text-center text-xs">{new Date(invoice.invoice_date).toLocaleString('en-SA')}</p>
         <hr className="my-2 border-dashed" />
         {invoice.items.map((item) => (
           <div key={item.id} className="mb-1 flex justify-between">
-            <span>{item.quantity} x ₹{item.unit_price.toFixed(2)}</span>
-            <span>₹{item.line_total.toFixed(2)}</span>
+            <span>{item.quantity} x SAR {item.unit_price.toFixed(2)}</span>
+            <span>SAR {item.line_total.toFixed(2)}</span>
           </div>
         ))}
         <hr className="my-2 border-dashed" />
         {isOfflinePending ? (
-          <div className="flex justify-between"><span>Subtotal (GST pending sync)</span><span>₹{invoice.taxable_total.toFixed(2)}</span></div>
+          <div className="flex justify-between"><span>Subtotal (VAT pending sync)</span><span>SAR {invoice.taxable_total.toFixed(2)}</span></div>
         ) : (
-          <div className="flex justify-between"><span>Taxable value</span><span>₹{invoice.taxable_total.toFixed(2)}</span></div>
+          <div className="flex justify-between"><span>Taxable value</span><span>SAR {invoice.taxable_total.toFixed(2)}</span></div>
         )}
-        {invoice.cgst_total > 0 && <div className="flex justify-between"><span>CGST</span><span>₹{invoice.cgst_total.toFixed(2)}</span></div>}
-        {invoice.sgst_total > 0 && <div className="flex justify-between"><span>SGST</span><span>₹{invoice.sgst_total.toFixed(2)}</span></div>}
-        {invoice.igst_total > 0 && <div className="flex justify-between"><span>IGST</span><span>₹{invoice.igst_total.toFixed(2)}</span></div>}
+        {invoice.vat_total > 0 && <div className="flex justify-between"><span>VAT (15%)</span><span>SAR {invoice.vat_total.toFixed(2)}</span></div>}
         {invoice.coupon_discount_amount > 0 && (
-          <div className="flex justify-between"><span>Coupon ({invoice.coupon_code})</span><span>-₹{invoice.coupon_discount_amount.toFixed(2)}</span></div>
+          <div className="flex justify-between"><span>Coupon ({invoice.coupon_code})</span><span>-SAR {invoice.coupon_discount_amount.toFixed(2)}</span></div>
         )}
-        <div className="flex justify-between"><span>Round off</span><span>₹{invoice.round_off.toFixed(2)}</span></div>
+        <div className="flex justify-between"><span>Round off</span><span>SAR {invoice.round_off.toFixed(2)}</span></div>
         <hr className="my-2 border-dashed" />
-        <div className="flex justify-between text-base font-bold"><span>Grand Total</span><span>₹{invoice.grand_total.toFixed(2)}</span></div>
+        <div className="flex justify-between text-base font-bold"><span>Grand Total</span><span>SAR {invoice.grand_total.toFixed(2)}</span></div>
         <hr className="my-2 border-dashed" />
         {invoice.payments.map((p) => (
-          <div key={p.id} className="flex justify-between"><span>{p.method.toUpperCase()}</span><span>₹{p.amount.toFixed(2)}</span></div>
+          <div key={p.id} className="flex justify-between"><span>{p.method.toUpperCase()}</span><span>SAR {p.amount.toFixed(2)}</span></div>
         ))}
         {profile?.footer_note ? (
           <p className="mt-4 text-center text-xs whitespace-pre-line">{profile.footer_note}</p>

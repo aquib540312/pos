@@ -472,7 +472,7 @@ function PurchaseReturnsTab({
                   </td>
                   <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{new Date(r.return_date).toLocaleString('en-IN')}</td>
                   <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{r.reason ?? '-'}</td>
-                  <td className="px-4 py-3 text-right font-medium text-slate-900 dark:text-slate-100">₹{r.return_total.toFixed(2)}</td>
+                  <td className="px-4 py-3 text-right font-medium text-slate-900 dark:text-slate-100">SAR {r.return_total.toFixed(2)}</td>
                   <td className="px-4 py-3 text-right">
                     <button
                       onClick={() => setViewDoc(r)}
@@ -1037,7 +1037,7 @@ function ItemsTable({
           <th className="py-1">Qty</th>
           {showFreeQty && <th className="py-1">Free/Bonus Qty</th>}
           <th className="py-1">{costLabel}</th>
-          {showDiscount && <th className="py-1">Discount (₹)</th>}
+          {showDiscount && <th className="py-1">Discount (SAR)</th>}
           <th className="py-1" />
         </tr>
       </thead>
@@ -1526,7 +1526,7 @@ function PoDocument({
         supplier={supplierName}
         extra={`Status: ${doc.status}`}
       />
-      <DocTable head={['Product', 'Qty Ordered', 'Unit Cost (₹)', 'Discount (₹)', 'Net (₹)']}>
+      <DocTable head={['Product', 'Qty Ordered', 'Unit Cost (SAR)', 'Discount (SAR)', 'Net (SAR)']}>
         {doc.items.map((i) => (
           <tr key={i.id} className="border-b border-slate-300 print:border-slate-400">
             <td className="py-1 pr-2">{productNames[i.product_id] ?? i.product_id}</td>
@@ -1538,7 +1538,7 @@ function PoDocument({
         ))}
       </DocTable>
       <div className="flex justify-end text-sm font-bold">
-        <span>Order Total: ₹{total.toFixed(2)}</span>
+        <span>Order Total: SAR {total.toFixed(2)}</span>
       </div>
     </div>
   )
@@ -1558,11 +1558,11 @@ function GrnDocument({
   const rows = doc.items.map((i) => {
     const paidQty = i.quantity - (i.free_quantity ?? 0)
     const taxable = i.quantity * i.unit_cost - (i.discount_amount ?? 0)
-    const gst = (i.cgst_amount ?? 0) + (i.sgst_amount ?? 0) + (i.igst_amount ?? 0)
-    return { i, paidQty, taxable, gst, total: taxable + gst }
+    const vat = i.vat_amount ?? 0
+    return { i, paidQty, taxable, vat, total: taxable + vat }
   })
   const taxableTotal = rows.reduce((s, r) => s + r.taxable, 0)
-  const gstTotal = rows.reduce((s, r) => s + r.gst, 0)
+  const vatTotal = rows.reduce((s, r) => s + r.vat, 0)
   return (
     <div>
       <DocHeader
@@ -1572,23 +1572,23 @@ function GrnDocument({
         supplier={supplierName}
         extra={doc.supplier_invoice_number ? `Supplier Invoice: ${doc.supplier_invoice_number}` : undefined}
       />
-      <DocTable head={['Product', 'Paid Qty', 'Unit Cost (₹)', 'Discount (₹)', 'Taxable (₹)', 'GST (₹)', 'Total (₹)']}>
-        {rows.map(({ i, paidQty, taxable, gst, total }) => (
+      <DocTable head={['Product', 'Paid Qty', 'Unit Cost (SAR)', 'Discount (SAR)', 'Taxable (SAR)', 'VAT (SAR)', 'Total (SAR)']}>
+        {rows.map(({ i, paidQty, taxable, vat, total }) => (
           <tr key={i.id} className="border-b border-slate-300 print:border-slate-400">
             <td className="py-1 pr-2">{productNames[i.product_id] ?? i.product_id}</td>
             <td className="py-1 pr-2">{paidQty}</td>
             <td className="py-1 pr-2">{i.unit_cost.toFixed(2)}</td>
             <td className="py-1 pr-2">{(i.discount_amount ?? 0).toFixed(2)}</td>
             <td className="py-1 pr-2">{taxable.toFixed(2)}</td>
-            <td className="py-1 pr-2">{gst.toFixed(2)}</td>
+            <td className="py-1 pr-2">{vat.toFixed(2)}</td>
             <td className="py-1 pr-2 font-medium">{total.toFixed(2)}</td>
           </tr>
         ))}
       </DocTable>
       <div className="flex justify-end gap-8 text-sm">
-        <span className="font-semibold">Taxable: ₹{taxableTotal.toFixed(2)}</span>
-        <span className="font-semibold">GST: ₹{gstTotal.toFixed(2)}</span>
-        <span className="font-bold">Invoice Total: ₹{(taxableTotal + gstTotal).toFixed(2)}</span>
+        <span className="font-semibold">Taxable: SAR {taxableTotal.toFixed(2)}</span>
+        <span className="font-semibold">VAT: SAR {vatTotal.toFixed(2)}</span>
+        <span className="font-bold">Invoice Total: SAR {(taxableTotal + vatTotal).toFixed(2)}</span>
       </div>
     </div>
   )
@@ -1605,7 +1605,7 @@ function ReturnDocument({
   productNames: Record<string, string>
   title: string
 }) {
-  const gstOf = (i: PurchaseReturnItem) => (i.cgst_amount ?? 0) + (i.sgst_amount ?? 0) + (i.igst_amount ?? 0)
+  const gstOf = (i: PurchaseReturnItem) => i.vat_amount ?? 0
   return (
     <div>
       <DocHeader
@@ -1620,7 +1620,7 @@ function ReturnDocument({
           Reason: <span className="font-medium">{doc.reason}</span>
         </p>
       )}
-      <DocTable head={['Product', 'Qty', 'Unit Cost (₹)', 'Taxable (₹)', 'GST (₹)', 'Line Total (₹)']}>
+      <DocTable head={['Product', 'Qty', 'Unit Cost (SAR)', 'Taxable (SAR)', 'VAT (SAR)', 'Line Total (SAR)']}>
         {doc.items.map((i) => (
           <tr key={i.id} className="border-b border-slate-300 print:border-slate-400">
             <td className="py-1 pr-2">{productNames[i.product_id] ?? i.product_id}</td>
@@ -1633,7 +1633,7 @@ function ReturnDocument({
         ))}
       </DocTable>
       <div className="flex justify-end text-sm font-bold">
-        <span>Return Total: ₹{doc.return_total.toFixed(2)}</span>
+        <span>Return Total: SAR {doc.return_total.toFixed(2)}</span>
       </div>
     </div>
   )

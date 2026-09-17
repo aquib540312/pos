@@ -19,7 +19,7 @@ export default function SignupPage() {
   const [plans, setPlans] = useState<Plan[]>([])
   const [legalName, setLegalName] = useState('')
   const [tradeName, setTradeName] = useState('')
-  const [gstin, setGstin] = useState('')
+  const [vatNumber, setVatNumber] = useState('')
   const [stateCode, setStateCode] = useState('27')
   const [branchName, setBranchName] = useState('Main Store')
   const [adminFullName, setAdminFullName] = useState('')
@@ -43,7 +43,7 @@ export default function SignupPage() {
       const resp = await apiClient.post('/auth/signup', {
         legal_name: legalName,
         trade_name: tradeName,
-        gstin: gstin || null,
+        vat_number: vatNumber || null,
         default_state_code: stateCode,
         branch_name: branchName,
         admin_full_name: adminFullName,
@@ -111,7 +111,7 @@ export default function SignupPage() {
         <div className="mb-4 grid grid-cols-2 gap-3">
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
-              Home state (GST)
+              Home state
             </label>
             <select
               required
@@ -128,11 +128,11 @@ export default function SignupPage() {
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
-              GSTIN (optional)
+              VAT Number (optional)
             </label>
             <input
-              value={gstin}
-              onChange={(e) => setGstin(e.target.value)}
+              value={vatNumber}
+              onChange={(e) => setVatNumber(e.target.value)}
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100"
             />
           </div>
@@ -198,7 +198,7 @@ export default function SignupPage() {
               }`}
             >
               <div className="font-semibold text-slate-900 dark:text-slate-100">{p.name}</div>
-              <div className="text-slate-500 dark:text-slate-400">₹{p.price_monthly}/mo</div>
+              <div className="text-slate-500 dark:text-slate-400">SAR {p.price_monthly}/mo</div>
             </button>
           ))}
         </div>

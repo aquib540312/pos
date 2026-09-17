@@ -413,7 +413,7 @@ export default function QuotationsPage() {
                 </td>
                 <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{q.quotation_date}</td>
                 <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{q.valid_until ?? '-'}</td>
-                <td className="px-4 py-3 text-slate-600 dark:text-slate-300">₹{q.grand_total.toFixed(2)}</td>
+                <td className="px-4 py-3 text-slate-600 dark:text-slate-300">SAR {q.grand_total.toFixed(2)}</td>
                 <td className="px-4 py-3">
                   <span
                     className={`rounded-full px-2 py-0.5 text-xs font-medium ${
@@ -511,7 +511,7 @@ export default function QuotationsPage() {
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100"
             />
             <p className="mb-4 mt-1 text-xs text-slate-400">
-              Includes an estimated GST -- the quoted total ({convertingFor && `₹${convertingFor.grand_total.toFixed(2)}`}) doesn't. Adjust if this doesn't match the confirmation.
+              Includes an estimated VAT -- the quoted total ({convertingFor && `SAR ${convertingFor.grand_total.toFixed(2)}`}) doesn't. Adjust if this doesn't match the confirmation.
             </p>
 
             <div className="flex justify-end gap-2">
@@ -612,9 +612,9 @@ function QuotationDocModal({
             <tr className="border-b-2 border-slate-900">
               <th className="py-1 text-left font-semibold">Product</th>
               <th className="py-1 text-left font-semibold">Qty</th>
-              <th className="py-1 text-left font-semibold">Unit Price (₹)</th>
-              <th className="py-1 text-left font-semibold">Discount (₹)</th>
-              <th className="py-1 text-left font-semibold">Line Total (₹)</th>
+              <th className="py-1 text-left font-semibold">Unit Price (SAR)</th>
+              <th className="py-1 text-left font-semibold">Discount (SAR)</th>
+              <th className="py-1 text-left font-semibold">Line Total (SAR)</th>
             </tr>
           </thead>
           <tbody>
@@ -630,7 +630,7 @@ function QuotationDocModal({
           </tbody>
         </table>
         <div className="flex justify-end text-sm font-bold">
-          <span>Grand Total: ₹{doc.grand_total.toFixed(2)}</span>
+          <span>Grand Total: SAR {doc.grand_total.toFixed(2)}</span>
         </div>
       </div>
     </div>

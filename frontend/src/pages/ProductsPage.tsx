@@ -549,8 +549,8 @@ export default function ProductsPage() {
                 <td className="px-4 py-3 font-medium text-slate-900 dark:text-slate-100">{p.name}</td>
                 <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{p.brand ?? '—'}</td>
                 <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{p.category_name ?? '—'}</td>
-                <td className="px-4 py-3 text-slate-600 dark:text-slate-300">₹{p.mrp.toFixed(2)}</td>
-                <td className="px-4 py-3 text-slate-600 dark:text-slate-300">₹{p.sale_price.toFixed(2)}{p.prices_gst_inclusive ? ' (inc GST)' : ''}</td>
+                <td className="px-4 py-3 text-slate-600 dark:text-slate-300">SAR {p.mrp.toFixed(2)}</td>
+                <td className="px-4 py-3 text-slate-600 dark:text-slate-300">SAR {p.sale_price.toFixed(2)}{p.prices_gst_inclusive ? ' (inc VAT)' : ''}</td>
                 <td className="px-4 py-3 text-right whitespace-nowrap">
                   {canManageCatalog && (
                     <button

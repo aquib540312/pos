@@ -118,7 +118,7 @@ export default function SalesHistoryPage() {
                     <td className="px-4 py-3 text-slate-600 dark:text-slate-300">
                       {inv.customer_id ? inv.customer_id.slice(0, 8) : 'Walk-in'}
                     </td>
-                    <td className="px-4 py-3 text-slate-900 dark:text-slate-100">₹{inv.grand_total.toFixed(2)}</td>
+                    <td className="px-4 py-3 text-slate-900 dark:text-slate-100">SAR {inv.grand_total.toFixed(2)}</td>
                     <td className="px-4 py-3">
                       <span
                         className={`rounded-full px-2 py-0.5 text-xs font-medium ${
@@ -175,7 +175,7 @@ export default function SalesHistoryPage() {
                 <tr key={r.id} className="border-b border-slate-100 last:border-0 dark:border-slate-700">
                   <td className="px-4 py-3 font-medium text-slate-900 dark:text-slate-100">{r.return_number}</td>
                   <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{new Date(r.return_date).toLocaleString()}</td>
-                  <td className="px-4 py-3 text-slate-900 dark:text-slate-100">₹{r.refund_total.toFixed(2)}</td>
+                  <td className="px-4 py-3 text-slate-900 dark:text-slate-100">SAR {r.refund_total.toFixed(2)}</td>
                   <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{r.refund_mode}</td>
                   <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{r.reason ?? '—'}</td>
                   <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{r.items.length}</td>
@@ -214,18 +214,18 @@ export default function SalesHistoryPage() {
                   <tr key={item.id} className="border-b border-slate-100 last:border-0">
                     <td className="px-2 py-2">{item.product_id.slice(0, 8)}</td>
                     <td className="px-2 py-2">{item.quantity}</td>
-                    <td className="px-2 py-2">₹{item.unit_price.toFixed(2)}</td>
-                    <td className="px-2 py-2">₹{item.taxable_value.toFixed(2)}</td>
-                    <td className="px-2 py-2">₹{(item.cgst_amount + item.sgst_amount + item.igst_amount).toFixed(2)}</td>
-                    <td className="px-2 py-2">₹{item.line_total.toFixed(2)}</td>
+                    <td className="px-2 py-2">SAR {item.unit_price.toFixed(2)}</td>
+                    <td className="px-2 py-2">SAR {item.taxable_value.toFixed(2)}</td>
+                    <td className="px-2 py-2">SAR {item.vat_amount.toFixed(2)}</td>
+                    <td className="px-2 py-2">SAR {item.line_total.toFixed(2)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
             <div className="mb-4 text-right">
-              <p className="text-sm">Subtotal: ₹{selectedInvoice.subtotal.toFixed(2)}</p>
-              <p className="text-sm">GST: ₹{(selectedInvoice.cgst_total + selectedInvoice.sgst_total + selectedInvoice.igst_total).toFixed(2)}</p>
-              <p className="text-lg font-semibold">Grand Total: ₹{selectedInvoice.grand_total.toFixed(2)}</p>
+              <p className="text-sm">Subtotal: SAR {selectedInvoice.subtotal.toFixed(2)}</p>
+              <p className="text-sm">VAT: SAR {selectedInvoice.vat_total.toFixed(2)}</p>
+              <p className="text-lg font-semibold">Grand Total: SAR {selectedInvoice.grand_total.toFixed(2)}</p>
             </div>
             <div className="flex justify-end gap-2">
               <button onClick={() => setSelectedInvoice(null)} className="rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 dark:bg-slate-700 dark:text-slate-200">

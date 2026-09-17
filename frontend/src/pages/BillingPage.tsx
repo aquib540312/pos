@@ -153,7 +153,7 @@ export default function BillingPage() {
               } bg-white dark:bg-slate-800`}
             >
               <p className="font-semibold text-slate-900 dark:text-slate-100">{p.name}</p>
-              <p className="mb-2 text-sm text-slate-500 dark:text-slate-400">₹{p.price_monthly}/mo</p>
+              <p className="mb-2 text-sm text-slate-500 dark:text-slate-400">SAR {p.price_monthly}/mo</p>
               <p className="mb-1 text-xs text-slate-500 dark:text-slate-400">
                 {p.max_branches ?? 'Unlimited'} branches
               </p>

@@ -48,7 +48,7 @@ function todayISO() {
 }
 
 function inr(n: number) {
-  return `₹${n.toFixed(2)}`
+  return `SAR ${n.toFixed(2)}`
 }
 
 function formatDate(iso: string) {
@@ -250,7 +250,7 @@ export default function ReportsPage() {
           {[
             { label: 'Invoices', value: salesSummary.invoice_count.toString() },
             { label: 'Taxable Value', value: inr(salesSummary.total_taxable_value) },
-            { label: 'GST Collected', value: inr(salesSummary.total_cgst + salesSummary.total_sgst + salesSummary.total_igst + salesSummary.total_cess) },
+            { label: 'VAT Collected', value: inr(salesSummary.total_vat) },
             { label: 'Grand Total', value: inr(salesSummary.total_grand_total) },
           ].map((card) => (
             <div key={card.label} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-800">
@@ -339,12 +339,12 @@ export default function ReportsPage() {
 
       {activeTab === 'gstr1' && (
         <Table
-          columns={['HSN Code', 'Rate %', 'Taxable Value', 'CGST', 'SGST', 'IGST', 'Cess', 'Invoices']}
+          columns={['HSN Code', 'Rate %', 'Taxable Value', 'VAT', 'Invoices']}
           rows={gstr1.map((r) => [
-            r.hsn_code, r.tax_rate_percent.toString(), inr(r.taxable_value), inr(r.cgst), inr(r.sgst), inr(r.igst),
-            inr(r.cess), r.invoice_count.toString(),
+            r.hsn_code, r.tax_rate_percent.toString(), inr(r.taxable_value), inr(r.vat),
+            r.invoice_count.toString(),
           ])}
-          emptyText="No GST data in this period."
+          emptyText="No VAT data in this period."
         />
       )}
 

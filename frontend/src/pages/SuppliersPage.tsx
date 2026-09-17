@@ -6,7 +6,7 @@ export default function SuppliersPage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [showForm, setShowForm] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [form, setForm] = useState({ name: '', phone: '', email: '', gstin: '', state_code: '' })
+  const [form, setForm] = useState({ name: '', phone: '', email: '', vat_number: '' })
   const [payFor, setPayFor] = useState<Supplier | null>(null)
   const [payments, setPayments] = useState<SupplierPayment[]>([])
 
@@ -27,10 +27,9 @@ export default function SuppliersPage() {
         name: form.name,
         phone: form.phone || null,
         email: form.email || null,
-        gstin: form.gstin || null,
-        state_code: form.state_code || null,
+        vat_number: form.vat_number || null,
       })
-      setForm({ name: '', phone: '', email: '', gstin: '', state_code: '' })
+      setForm({ name: '', phone: '', email: '', vat_number: '' })
       setShowForm(false)
       load()
     } catch (err) {
@@ -64,8 +63,7 @@ export default function SuppliersPage() {
           <input required placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100" />
           <input placeholder="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100" />
           <input placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100" />
-          <input placeholder="GSTIN" value={form.gstin} onChange={(e) => setForm({ ...form, gstin: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100" />
-          <input placeholder="State code" value={form.state_code} onChange={(e) => setForm({ ...form, state_code: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100" />
+          <input placeholder="VAT Number" value={form.vat_number} onChange={(e) => setForm({ ...form, vat_number: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100" />
           {error && <p className="col-span-full text-sm text-red-600 dark:text-red-400">{error}</p>}
           <button type="submit" className="col-span-full rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500">
             Save supplier
@@ -79,7 +77,7 @@ export default function SuppliersPage() {
             <tr>
               <th className="px-4 py-3">Name</th>
               <th className="px-4 py-3">Phone</th>
-              <th className="px-4 py-3">GSTIN</th>
+              <th className="px-4 py-3">VAT Number</th>
               <th className="px-4 py-3">Payable Balance</th>
               <th className="px-4 py-3 text-right">Actions</th>
             </tr>
@@ -89,8 +87,8 @@ export default function SuppliersPage() {
               <tr key={s.id} className="border-b border-slate-100 last:border-0 dark:border-slate-700">
                 <td className="px-4 py-3 font-medium text-slate-900 dark:text-slate-100">{s.name}</td>
                 <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{s.phone ?? '-'}</td>
-                <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{s.gstin ?? '-'}</td>
-                <td className="px-4 py-3 text-slate-600 dark:text-slate-300">₹{s.payable_balance.toFixed(2)}</td>
+                <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{s.vat_number ?? '-'}</td>
+                <td className="px-4 py-3 text-slate-600 dark:text-slate-300">SAR {s.payable_balance.toFixed(2)}</td>
                 <td className="px-4 py-3 text-right">
                   <button
                     onClick={() => openPay(s)}
@@ -189,7 +187,7 @@ function SupplierPaymentModal({
 
         <div className="mb-4 rounded-lg bg-slate-50 px-4 py-3 dark:bg-slate-700">
           <p className="text-xs text-slate-500 dark:text-slate-400">Outstanding payable</p>
-          <p className="text-xl font-semibold text-slate-900 dark:text-slate-50">₹{supplier.payable_balance.toFixed(2)}</p>
+          <p className="text-xl font-semibold text-slate-900 dark:text-slate-50">SAR {supplier.payable_balance.toFixed(2)}</p>
         </div>
 
         <form onSubmit={handlePay} className="mb-6 grid grid-cols-2 gap-3">
@@ -238,13 +236,13 @@ function SupplierPaymentModal({
             >
               <div>
                 <p className="text-slate-900 dark:text-slate-100">
-                  ₹{p.amount.toFixed(2)} <span className="text-slate-400">via {p.method}</span>
+                  SAR {p.amount.toFixed(2)} <span className="text-slate-400">via {p.method}</span>
                 </p>
                 {p.reference && <p className="text-xs text-slate-400">{p.reference}</p>}
               </div>
               <div className="text-right">
                 <p className="text-xs text-slate-400">{new Date(p.paid_at).toLocaleString('en-IN')}</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Outstanding: ₹{p.outstanding_payable.toFixed(2)}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Outstanding: SAR {p.outstanding_payable.toFixed(2)}</p>
               </div>
             </div>
           ))}
