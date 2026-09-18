@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { apiClient, apiErrorMessage } from '../api/client'
 import { useCan, PERMS } from '../auth/permissions'
+import { useOrgStore } from '../store/org'
 import type { SaleInvoice, SalesReturn } from '../types'
 
 export default function SalesHistoryPage() {
@@ -12,6 +13,51 @@ export default function SalesHistoryPage() {
   const [selectedInvoice, setSelectedInvoice] = useState<SaleInvoice | null>(null)
   const [cancelling, setCancelling] = useState<string | null>(null)
   const canReturn = useCan(PERMS.SALES_RETURN)
+  const profile = useOrgStore((s) => s.profile)
+
+  function printInvoice(inv: SaleInvoice) {
+    const bizName = profile?.trade_name || profile?.legal_name || 'Store'
+    const w = window.open('', '_blank', 'width=400,height=700')
+    if (!w) return
+    const payLines = inv.payments.map((p) => `<div style="display:flex;justify-content:space-between"><span>${p.method.toUpperCase()}</span><span>SAR ${p.amount.toFixed(2)}</span></div>`).join('')
+    const itemLines = inv.items.map((it) => `<tr><td>${it.product_name || it.product_id.slice(0, 8)}</td><td style="text-align:right">${it.quantity}</td><td style="text-align:right">SAR ${it.unit_price.toFixed(2)}</td><td style="text-align:right">SAR ${it.line_total.toFixed(2)}</td></tr>`).join('')
+    w.document.write(`<!DOCTYPE html><html><head><title>${inv.invoice_number}</title><style>
+      *{margin:0;padding:0;box-sizing:border-box}
+      body{font-family:'Courier New',monospace;font-size:13px;width:320px;margin:0 auto;padding:10px}
+      .center{text-align:center}
+      .bold{font-weight:700}
+      .line{border-top:1px dashed #000;margin:6px 0}
+      table{width:100%;border-collapse:collapse}
+      td{padding:2px 0;font-size:12px}
+      @media print{body{margin:0;padding:5px}}
+    </style></head><body>
+      <div class="center bold" style="font-size:18px">${bizName}</div>
+      ${profile?.address ? `<div class="center">${profile.address}</div>` : ''}
+      ${profile?.phone ? `<div class="center">Tel: ${profile.phone}</div>` : ''}
+      ${profile?.vat_number ? `<div class="center">VAT: ${profile.vat_number}</div>` : ''}
+      <div class="line"></div>
+      <div class="center bold" style="font-size:15px">TAX INVOICE</div>
+      <div class="center">${inv.invoice_number}</div>
+      <div class="center">${new Date(inv.invoice_date).toLocaleString()}</div>
+      <div class="line"></div>
+      <table><thead><tr><th style="text-align:left">Item</th><th style="text-align:right">Qty</th><th style="text-align:right">Price</th><th style="text-align:right">Total</th></tr></thead>
+      <tbody>${itemLines}</tbody></table>
+      <div class="line"></div>
+      <div style="display:flex;justify-content:space-between"><span>Subtotal</span><span>SAR ${inv.subtotal.toFixed(2)}</span></div>
+      <div style="display:flex;justify-content:space-between"><span>VAT (15%)</span><span>SAR ${inv.vat_total.toFixed(2)}</span></div>
+      ${inv.coupon_discount_amount ? `<div style="display:flex;justify-content:space-between"><span>Coupon (${inv.coupon_code || ''})</span><span>-SAR ${inv.coupon_discount_amount.toFixed(2)}</span></div>` : ''}
+      ${inv.round_off ? `<div style="display:flex;justify-content:space-between"><span>Round off</span><span>SAR ${inv.round_off.toFixed(2)}</span></div>` : ''}
+      <div class="line"></div>
+      <div style="display:flex;justify-content:space-between" class="bold" style="font-size:15px"><span class="bold" style="font-size:15px">GRAND TOTAL</span><span class="bold" style="font-size:15px">SAR ${inv.grand_total.toFixed(2)}</span></div>
+      <div class="line"></div>
+      ${payLines}
+      <div class="line"></div>
+      <div class="center">${profile?.footer_note || 'Thank you for shopping with us!'}</div>
+      <div class="line"></div>
+    </body></html>`)
+    w.document.close()
+    w.print()
+  }
 
   async function loadInvoices() {
     try {
@@ -131,18 +177,23 @@ export default function SalesHistoryPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <button onClick={() => setSelectedInvoice(inv)} className="text-indigo-600 hover:underline dark:text-indigo-400">
-                        View
-                      </button>
-                      {canReturn && inv.status === 'posted' && (
-                        <button
-                          onClick={() => handleCancel(inv.id)}
-                          disabled={cancelling === inv.id}
-                          className="ml-3 text-red-600 hover:underline disabled:opacity-50 dark:text-red-400"
-                        >
-                          {cancelling === inv.id ? '...' : 'Cancel'}
+                      <div className="flex gap-2">
+                        <button onClick={() => setSelectedInvoice(inv)} className="text-indigo-600 hover:underline dark:text-indigo-400">
+                          View
                         </button>
-                      )}
+                        <button onClick={() => printInvoice(inv)} className="text-slate-600 hover:underline dark:text-slate-400">
+                          Print
+                        </button>
+                        {canReturn && inv.status === 'posted' && (
+                          <button
+                            onClick={() => handleCancel(inv.id)}
+                            disabled={cancelling === inv.id}
+                            className="text-red-600 hover:underline disabled:opacity-50 dark:text-red-400"
+                          >
+                            {cancelling === inv.id ? '...' : 'Cancel'}
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -230,6 +281,9 @@ export default function SalesHistoryPage() {
             <div className="flex justify-end gap-2">
               <button onClick={() => setSelectedInvoice(null)} className="rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 dark:bg-slate-700 dark:text-slate-200">
                 Close
+              </button>
+              <button onClick={() => printInvoice(selectedInvoice)} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500">
+                Print Receipt
               </button>
               {canReturn && selectedInvoice.status === 'posted' && (
                 <button onClick={() => handleCancel(selectedInvoice.id)} className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-500">
