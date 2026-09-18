@@ -4,7 +4,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import CreditLimitExceededError, NotFoundError
-from app.models.party import Customer, Supplier, SupplierPayment
+from app.models.party import Customer, CustomerPayment, Supplier, SupplierPayment
 from app.modules.accounting.service import AccountingService
 from app.modules.party.repository import CustomerPaymentRepository, CustomerRepository, SupplierPaymentRepository, SupplierRepository
 
