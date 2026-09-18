@@ -7,6 +7,7 @@ export default function SuppliersPage() {
   const [showForm, setShowForm] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [form, setForm] = useState({ name: '', name_arabic: '', phone: '', email: '', vat_number: '', cr_number: '', address: '' })
+  const [editId, setEditId] = useState<string | null>(null)
   const [payFor, setPayFor] = useState<Supplier | null>(null)
   const [payments, setPayments] = useState<SupplierPayment[]>([])
 
@@ -23,7 +24,7 @@ export default function SuppliersPage() {
     e.preventDefault()
     setError(null)
     try {
-      await apiClient.post('/party/suppliers', {
+      const payload = {
         name: form.name,
         name_arabic: form.name_arabic || null,
         phone: form.phone || null,
@@ -31,13 +32,29 @@ export default function SuppliersPage() {
         vat_number: form.vat_number || null,
         cr_number: form.cr_number || null,
         address: form.address || null,
-      })
+      }
+      if (editId) {
+        await apiClient.patch(`/party/suppliers/${editId}`, payload)
+      } else {
+        await apiClient.post('/party/suppliers', payload)
+      }
       setForm({ name: '', name_arabic: '', phone: '', email: '', vat_number: '', cr_number: '', address: '' })
+      setEditId(null)
       setShowForm(false)
       load()
     } catch (err) {
       setError(apiErrorMessage(err))
     }
+  }
+
+  function openEdit(s: Supplier) {
+    setEditId(s.id)
+    setForm({
+      name: s.name, name_arabic: s.name_arabic ?? '', phone: s.phone ?? '',
+      email: s.email ?? '', vat_number: s.vat_number ?? '', cr_number: s.cr_number ?? '',
+      address: s.address ?? '',
+    })
+    setShowForm(true)
   }
 
   async function openPay(supplier: Supplier) {
@@ -51,7 +68,7 @@ export default function SuppliersPage() {
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-50">Suppliers</h1>
         <button
-          onClick={() => setShowForm((v) => !v)}
+          onClick={() => { setShowForm((v) => !v); if (showForm) { setEditId(null); setForm({ name: '', name_arabic: '', phone: '', email: '', vat_number: '', cr_number: '', address: '' }) } }}
           className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500"
         >
           {showForm ? 'Cancel' : '+ New Supplier'}
@@ -72,7 +89,7 @@ export default function SuppliersPage() {
           <input placeholder="Address" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100" />
           {error && <p className="col-span-full text-sm text-red-600 dark:text-red-400">{error}</p>}
           <button type="submit" className="col-span-full rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500">
-            Save supplier
+            {editId ? 'Update supplier' : 'Save supplier'}
           </button>
         </form>
       )}
@@ -100,13 +117,21 @@ export default function SuppliersPage() {
                 <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{s.address ?? '—'}</td>
                 <td className="px-4 py-3 text-slate-600 dark:text-slate-300">SAR {s.payable_balance.toFixed(2)}</td>
                 <td className="px-4 py-3 text-right">
-                  <button
-                    onClick={() => openPay(s)}
-                    disabled={s.payable_balance <= 0}
-                    className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-40"
-                  >
-                    Pay / History
-                  </button>
+                  <div className="flex items-center justify-end gap-2">
+                    <button
+                      onClick={() => openEdit(s)}
+                      className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => openPay(s)}
+                      disabled={s.payable_balance <= 0}
+                      className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-40"
+                    >
+                      Pay / History
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}

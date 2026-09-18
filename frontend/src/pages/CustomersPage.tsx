@@ -12,6 +12,7 @@ export default function CustomersPage() {
   const [payments, setPayments] = useState<CustomerPayment[]>([])
   const [showPaymentForm, setShowPaymentForm] = useState(false)
   const [paymentForm, setPaymentForm] = useState({ amount: '', method: 'cash', reference: '' })
+  const [editId, setEditId] = useState<string | null>(null)
   const [form, setForm] = useState({
     name: '', name_arabic: '', phone: '', vat_number: '', cr_number: '', address: '',
     customer_type: 'walk_in', price_level: 'retail', isCredit: false,
@@ -34,15 +35,21 @@ export default function CustomersPage() {
     e.preventDefault()
     setError(null)
     try {
-      await apiClient.post('/party/customers', {
+      const payload = {
         name: form.name, name_arabic: form.name_arabic || null, phone: form.phone || null,
         vat_number: form.vat_number || null, cr_number: form.cr_number || null,
         address: form.address || null, customer_type: form.customer_type,
         price_level: form.price_level, is_credit_customer: form.isCredit,
         credit_limit: form.isCredit ? Number(form.creditLimit || 0) : 0,
         payment_terms_days: Number(form.payment_terms_days || 0),
-      })
+      }
+      if (editId) {
+        await apiClient.patch(`/party/customers/${editId}`, payload)
+      } else {
+        await apiClient.post('/party/customers', payload)
+      }
       setForm({ name: '', name_arabic: '', phone: '', vat_number: '', cr_number: '', address: '', customer_type: 'walk_in', price_level: 'retail', isCredit: false, creditLimit: '', payment_terms_days: '' })
+      setEditId(null)
       setShowForm(false)
       load(search)
     } catch (err) { setError(apiErrorMessage(err)) }
@@ -69,11 +76,22 @@ export default function CustomersPage() {
     loadPayments(customerId)
   }
 
+  function openEdit(c: Customer) {
+    setEditId(c.id)
+    setForm({
+      name: c.name, name_arabic: c.name_arabic ?? '', phone: c.phone ?? '',
+      vat_number: c.vat_number ?? '', cr_number: c.cr_number ?? '', address: c.address ?? '',
+      customer_type: c.customer_type, price_level: c.price_level, isCredit: c.is_credit_customer,
+      creditLimit: String(c.credit_limit || ''), payment_terms_days: String(c.payment_terms_days || ''),
+    })
+    setShowForm(true)
+  }
+
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-50">Customers</h1>
-        <button onClick={() => setShowForm((v) => !v)} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500">
+        <button onClick={() => { setShowForm((v) => !v); if (showForm) { setEditId(null); setForm({ name: '', name_arabic: '', phone: '', vat_number: '', cr_number: '', address: '', customer_type: 'walk_in', price_level: 'retail', isCredit: false, creditLimit: '', payment_terms_days: '' }) } }} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500">
           {showForm ? 'Cancel' : '+ New Customer'}
         </button>
       </div>
@@ -101,7 +119,7 @@ export default function CustomersPage() {
           {form.isCredit && <input type="number" step="0.01" placeholder="Credit limit" value={form.creditLimit} onChange={(e) => setForm({ ...form, creditLimit: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100" />}
           <input type="number" placeholder="Payment terms (days)" value={form.payment_terms_days} onChange={(e) => setForm({ ...form, payment_terms_days: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100" />
           {error && <p className="col-span-full text-sm text-red-600 dark:text-red-400">{error}</p>}
-          <button type="submit" className="col-span-full rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500">Save customer</button>
+          <button type="submit" className="col-span-full rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500">{editId ? 'Update customer' : 'Save customer'}</button>
         </form>
       )}
 
@@ -130,7 +148,12 @@ export default function CustomersPage() {
                     <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{c.is_credit_customer ? `SAR ${c.credit_limit.toFixed(2)}` : '—'}</td>
                     <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{c.is_credit_customer ? `SAR ${c.credit_balance.toFixed(2)}` : '—'}</td>
                     <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{c.loyalty_points_balance}</td>
-                    <td className="px-4 py-3">{c.is_credit_customer ? <button onClick={() => openPaymentsTab(c.id)} className="text-indigo-600 hover:underline text-sm">View Payments</button> : <span className="text-slate-400 text-sm">—</span>}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex gap-2">
+                        <button onClick={() => openEdit(c)} className="text-sm text-slate-600 hover:underline dark:text-slate-400">Edit</button>
+                        {c.is_credit_customer && <button onClick={() => openPaymentsTab(c.id)} className="text-indigo-600 hover:underline text-sm">View Payments</button>}
+                      </div>
+                    </td>
                   </tr>
                 ))}
                 {customers.length === 0 && <tr><td colSpan={9} className="px-4 py-6 text-center text-slate-400">No customers found.</td></tr>}
