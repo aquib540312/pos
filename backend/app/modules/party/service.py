@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.core.exceptions import CreditLimitExceededError, NotFoundError
 from app.models.party import Customer, Supplier, SupplierPayment
 from app.modules.accounting.service import AccountingService
-from app.modules.party.repository import CustomerRepository, SupplierPaymentRepository, SupplierRepository
+from app.modules.party.repository import CustomerPaymentRepository, CustomerRepository, SupplierPaymentRepository, SupplierRepository
 
 
 class PartyService:
@@ -16,6 +16,7 @@ class PartyService:
         self.suppliers = SupplierRepository(db)
         self.supplier_payments = SupplierPaymentRepository(db)
         self.accounting = AccountingService(db)
+        self.customer_payments = CustomerPaymentRepository(db)
 
     def create_customer(self, organization_id: uuid.UUID, **fields) -> Customer:
         return self.customers.add(Customer(organization_id=organization_id, **fields))
@@ -55,7 +56,7 @@ class PartyService:
         if fields.get("credit_limit") is not None:
             customer.credit_limit = fields["credit_limit"]
         self._apply_nullable_fields(
-            customer, fields, ("phone", "email", "gstin", "state_code", "address")
+            customer, fields, ("phone", "email", "vat_number", "cr_number", "state_code", "address")
         )
         self.db.flush()
         return customer
@@ -66,16 +67,18 @@ class PartyService:
             raise NotFoundError(f"Supplier {supplier_id} not found")
         if fields.get("name") is not None:
             supplier.name = fields["name"]
+        if fields.get("name_arabic") is not None:
+            supplier.name_arabic = fields["name_arabic"]
         if fields.get("is_active") is not None:
             supplier.is_active = fields["is_active"]
         self._apply_nullable_fields(
-            supplier, fields, ("phone", "email", "gstin", "state_code", "address")
+            supplier, fields, ("phone", "email", "vat_number", "cr_number", "state_code", "address")
         )
         self.db.flush()
         return supplier
 
     def record_credit_payment(self, customer: Customer, amount: float) -> None:
-        customer.credit_balance = max(0.0, float(customer.credit_balance) - amount)
+        customer.credit_balance = max(0.0, float(customer.credit_balance or 0) - amount)
         self.db.flush()
 
     def assert_credit_available(self, customer: Customer, additional_amount: float) -> None:
@@ -84,36 +87,43 @@ class PartyService:
         full at checkout by definition."""
         if not customer.is_credit_customer:
             return
-        projected = float(customer.credit_balance) + additional_amount
-        if projected > float(customer.credit_limit):
+        projected = float(customer.credit_balance or 0) + additional_amount
+        if projected > float(customer.credit_limit or 0):
             raise CreditLimitExceededError(
                 f"Credit limit exceeded for {customer.name}: "
                 f"balance {customer.credit_balance} + {additional_amount} > limit {customer.credit_limit}"
             )
 
     def record_credit_sale(self, customer: Customer, amount: float) -> None:
-        customer.credit_balance = float(customer.credit_balance) + amount
+        customer.credit_balance = float(customer.credit_balance or 0) + amount
         self.db.flush()
 
     def collect_credit(
         self, organization_id: uuid.UUID, customer_id: uuid.UUID, amount: float, method: str, reference: str | None
     ) -> tuple[Customer, float]:
         """Collection of a cash/card/UPI amount against an outstanding
-        customer credit balance (reduces Accounts Receivable). The Payment
-        table is invoice-scoped (invoice_id is NOT NULL), so a collection is
-        recorded directly against the customer's credit_balance only -- a
-        full standalone-payment/ledger integration is a Phase-2 accounting
-        refinement (see ROADMAP.md). Returns the customer and the amount
-        actually applied (capped at the outstanding balance)."""
+        customer credit balance (reduces Accounts Receivable). Creates a
+        CustomerPayment record and reduces the customer's credit_balance.
+        Returns the customer and the amount actually applied (capped at
+        the outstanding balance)."""
         customer = self.get_customer_or_404(customer_id)
         if customer.organization_id != organization_id:
             raise NotFoundError(f"Customer {customer_id} not found")
         if amount <= 0:
             raise CreditLimitExceededError("Collection amount must be positive")
-        available = float(customer.credit_balance)
+        available = float(customer.credit_balance or 0)
         applied = min(amount, available)
         if applied <= 0:
             raise NotFoundError(f"Customer '{customer.name}' has no outstanding credit to collect")
+        payment = CustomerPayment(
+            organization_id=organization_id,
+            customer_id=customer.id,
+            amount=applied,
+            method=method,
+            reference=reference,
+            paid_at=datetime.utcnow(),
+        )
+        self.customer_payments.add(payment)
         self.record_credit_payment(customer, applied)
         self.db.flush()
         return customer, applied
