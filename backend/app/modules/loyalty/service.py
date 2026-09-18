@@ -8,8 +8,8 @@ from app.models.loyalty import Coupon, GiftCard, GiftCardTransaction, LoyaltyTra
 from app.models.party import Customer
 from app.modules.loyalty.repository import CouponRepository, GiftCardRepository
 
-POINTS_PER_RUPEE_SPENT = 0.01  # 1 point per Rs.100 taxable spend
-POINT_VALUE_IN_RUPEES = 1.0  # 1 point = Re.1 discount on redemption
+POINTS_PER_RUPEE_SPENT = 0.01  # 1 point per SAR 100 taxable spend
+POINT_VALUE_IN_RUPEES = 1.0  # 1 point = SAR 1 discount on redemption
 
 
 class LoyaltyService:
@@ -38,7 +38,7 @@ class LoyaltyService:
         return points
 
     def redeem(self, customer: Customer, invoice_id: uuid.UUID, points: float) -> float:
-        """Returns the rupee discount value of the redeemed points."""
+        """Returns the discount value (in SAR) of the redeemed points."""
         if points <= 0:
             return 0.0
         if points > float(customer.loyalty_points_balance):

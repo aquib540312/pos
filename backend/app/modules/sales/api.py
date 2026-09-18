@@ -62,7 +62,7 @@ def _dispatch_receipt_sms(service: SalesService, invoice) -> None:
     try:
         customer = service.customers.get(invoice.customer_id)
         if customer and customer.phone:
-            message = f"Invoice {invoice.invoice_number}: Rs.{invoice.grand_total} paid. Thank you for shopping with us!"
+            message = f"Invoice {invoice.invoice_number}: SAR {invoice.grand_total} paid. Thank you for shopping with us!"
             send_notification_task.delay("sms", customer.phone, message)
     except Exception:  # noqa: BLE001 - notification dispatch must never break checkout
         logger.warning("Failed to queue receipt SMS for invoice %s", invoice.id, exc_info=True)
@@ -226,6 +226,7 @@ def create_sale(
         )
         db.commit()
     except DomainError as exc:
+        db.rollback()
         _handle(exc, db)
     _dispatch_receipt_sms(service, invoice)
     return invoice

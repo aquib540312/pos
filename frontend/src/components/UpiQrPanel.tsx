@@ -147,7 +147,7 @@ export default function UpiQrPanel({ amount, receiptReference, disabled, onPaid 
           onClick={createQr}
           className="w-full rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-500"
         >
-          Generate QR (₹{amount.toFixed(2)})
+          Generate QR (SAR {amount.toFixed(2)})
         </button>
       )}
 
@@ -162,7 +162,7 @@ export default function UpiQrPanel({ amount, receiptReference, disabled, onPaid 
               className="mx-auto mb-2 h-40 w-40 rounded border border-slate-200 dark:border-slate-600"
             />
           )}
-          <p className="text-sm font-medium text-slate-900 dark:text-slate-100">₹{transaction.amount.toFixed(2)}</p>
+          <p className="text-sm font-medium text-slate-900 dark:text-slate-100">SAR {transaction.amount.toFixed(2)}</p>
           <p className="text-xs text-slate-400">
             {secondsLeft > 0
               ? `Expires in ${Math.floor(secondsLeft / 60)}:${String(secondsLeft % 60).padStart(2, '0')}`

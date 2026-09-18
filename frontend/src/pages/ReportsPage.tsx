@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { apiClient, apiErrorMessage } from '../api/client'
+import { useOrgStore } from '../store/org'
 import type {
   BalanceSheetReport,
   CashierSalesReportRow,
@@ -47,15 +48,16 @@ function todayISO() {
   return new Date().toISOString().slice(0, 10)
 }
 
-function inr(n: number) {
+function fmt(n: number) {
   return `SAR ${n.toFixed(2)}`
 }
 
 function formatDate(iso: string) {
-  return new Date(`${iso}T00:00:00`).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+  return new Date(`${iso}T00:00:00`).toLocaleDateString('en-SA', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
 export default function ReportsPage() {
+  const taxMode = useOrgStore((s) => s.profile?.tax_mode ?? 'saudi')
   const [activeTab, setActiveTab] = useState<TabKey>('sales-summary')
   const [start, setStart] = useState(todayISO())
   const [end, setEnd] = useState(todayISO())
@@ -176,7 +178,7 @@ export default function ReportsPage() {
       loadSupplierLedger(selectedSupplierId)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedSupplierId, activeTab])
+  }, [selectedSupplierId, activeTab, start, end])
 
   const tab = TABS.find((t) => t.key === activeTab)!
 
@@ -185,7 +187,7 @@ export default function ReportsPage() {
       <h1 className="mb-6 text-2xl font-semibold text-slate-900 dark:text-slate-50">Reports</h1>
 
       <div className="mb-4 flex flex-wrap gap-2 border-b border-slate-200 pb-2 dark:border-slate-700">
-        {TABS.map((t) => (
+        {TABS.filter((t) => taxMode === 'saudi' ? t.key !== 'gstr1' : true).map((t) => (
           <button
             key={t.key}
             onClick={() => setActiveTab(t.key)}
@@ -249,9 +251,9 @@ export default function ReportsPage() {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {[
             { label: 'Invoices', value: salesSummary.invoice_count.toString() },
-            { label: 'Taxable Value', value: inr(salesSummary.total_taxable_value) },
-            { label: 'VAT Collected', value: inr(salesSummary.total_vat) },
-            { label: 'Grand Total', value: inr(salesSummary.total_grand_total) },
+            { label: 'Taxable Value', value: fmt(salesSummary.total_taxable_value) },
+            { label: 'VAT Collected', value: fmt(salesSummary.total_vat) },
+            { label: 'Grand Total', value: fmt(salesSummary.total_grand_total) },
           ].map((card) => (
             <div key={card.label} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-800">
               <p className="text-sm text-slate-500 dark:text-slate-400">{card.label}</p>
@@ -264,7 +266,7 @@ export default function ReportsPage() {
       {activeTab === 'top-products' && (
         <Table
           columns={['Product', 'SKU', 'Qty Sold', 'Revenue']}
-          rows={topProducts.map((r) => [r.product_name, r.sku, r.quantity_sold.toString(), inr(r.revenue)])}
+          rows={topProducts.map((r) => [r.product_name, r.sku, r.quantity_sold.toString(), fmt(r.revenue)])}
           emptyText="No sales in this period."
         />
       )}
@@ -272,7 +274,7 @@ export default function ReportsPage() {
       {activeTab === 'payment-breakdown' && (
         <Table
           columns={['Method', 'Payment Count', 'Total Amount']}
-          rows={paymentBreakdown.map((r) => [r.method.toUpperCase(), r.payment_count.toString(), inr(r.total_amount)])}
+          rows={paymentBreakdown.map((r) => [r.method.toUpperCase(), r.payment_count.toString(), fmt(r.total_amount)])}
           emptyText="No payments in this period."
         />
       )}
@@ -280,7 +282,7 @@ export default function ReportsPage() {
       {activeTab === 'sales-by-cashier' && (
         <Table
           columns={['Cashier', 'Invoices', 'Total Sales']}
-          rows={cashierSales.map((r) => [r.user_name, r.invoice_count.toString(), inr(r.total_grand_total)])}
+          rows={cashierSales.map((r) => [r.user_name, r.invoice_count.toString(), fmt(r.total_grand_total)])}
           emptyText="No shift-attributed sales in this period."
         />
       )}
@@ -320,7 +322,7 @@ export default function ReportsPage() {
           <p className="mb-3 text-sm text-slate-600 dark:text-slate-300">
             Total valuation:{' '}
             <span className="font-semibold text-slate-900 dark:text-slate-50">
-              {inr(stockValuation.reduce((sum, r) => sum + r.valuation, 0))}
+              {fmt(stockValuation.reduce((sum, r) => sum + r.valuation, 0))}
             </span>
           </p>
           <Table
@@ -329,8 +331,8 @@ export default function ReportsPage() {
               r.product_name,
               r.sku,
               r.quantity_on_hand.toString(),
-              inr(r.average_cost),
-              inr(r.valuation),
+              fmt(r.average_cost),
+              fmt(r.valuation),
             ])}
             emptyText="No stock valuation data."
           />
@@ -341,7 +343,7 @@ export default function ReportsPage() {
         <Table
           columns={['HSN Code', 'Rate %', 'Taxable Value', 'VAT', 'Invoices']}
           rows={gstr1.map((r) => [
-            r.hsn_code, r.tax_rate_percent.toString(), inr(r.taxable_value), inr(r.vat),
+            r.hsn_code, r.tax_rate_percent.toString(), fmt(r.taxable_value), fmt(r.vat),
             r.invoice_count.toString(),
           ])}
           emptyText="No VAT data in this period."
@@ -353,16 +355,16 @@ export default function ReportsPage() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-800">
               <p className="text-sm text-slate-500 dark:text-slate-400">Total Income</p>
-              <p className="mt-2 text-2xl font-semibold text-emerald-600">{inr(profitAndLoss.total_income)}</p>
+              <p className="mt-2 text-2xl font-semibold text-emerald-600">{fmt(profitAndLoss.total_income)}</p>
             </div>
             <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-800">
               <p className="text-sm text-slate-500 dark:text-slate-400">Total Expense</p>
-              <p className="mt-2 text-2xl font-semibold text-red-600">{inr(profitAndLoss.total_expense)}</p>
+              <p className="mt-2 text-2xl font-semibold text-red-600">{fmt(profitAndLoss.total_expense)}</p>
             </div>
             <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-800">
               <p className="text-sm text-slate-500 dark:text-slate-400">Net Profit</p>
               <p className={`mt-2 text-2xl font-semibold ${profitAndLoss.net_profit >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                {inr(profitAndLoss.net_profit)}
+                {fmt(profitAndLoss.net_profit)}
               </p>
             </div>
           </div>
@@ -370,7 +372,7 @@ export default function ReportsPage() {
             <h2 className="mb-2 text-lg font-semibold text-slate-800 dark:text-slate-200">Income</h2>
             <Table
               columns={['Code', 'Account', 'Amount']}
-              rows={profitAndLoss.income_lines.map((l) => [l.account_code, l.account_name, inr(l.amount)])}
+              rows={profitAndLoss.income_lines.map((l) => [l.account_code, l.account_name, fmt(l.amount)])}
               emptyText="No income lines."
             />
           </div>
@@ -378,7 +380,7 @@ export default function ReportsPage() {
             <h2 className="mb-2 text-lg font-semibold text-slate-800 dark:text-slate-200">Expenses</h2>
             <Table
               columns={['Code', 'Account', 'Amount']}
-              rows={profitAndLoss.expense_lines.map((l) => [l.account_code, l.account_name, inr(l.amount)])}
+              rows={profitAndLoss.expense_lines.map((l) => [l.account_code, l.account_name, fmt(l.amount)])}
               emptyText="No expense lines."
             />
           </div>
@@ -390,22 +392,22 @@ export default function ReportsPage() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-800">
               <p className="text-sm text-slate-500 dark:text-slate-400">Total Assets</p>
-              <p className="mt-2 text-2xl font-semibold text-slate-900 dark:text-slate-50">{inr(balanceSheet.total_assets)}</p>
+              <p className="mt-2 text-2xl font-semibold text-slate-900 dark:text-slate-50">{fmt(balanceSheet.total_assets)}</p>
             </div>
             <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-800">
               <p className="text-sm text-slate-500 dark:text-slate-400">Total Liabilities</p>
-              <p className="mt-2 text-2xl font-semibold text-slate-900 dark:text-slate-50">{inr(balanceSheet.total_liabilities)}</p>
+              <p className="mt-2 text-2xl font-semibold text-slate-900 dark:text-slate-50">{fmt(balanceSheet.total_liabilities)}</p>
             </div>
             <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-800">
               <p className="text-sm text-slate-500 dark:text-slate-400">Total Equity</p>
-              <p className="mt-2 text-2xl font-semibold text-slate-900 dark:text-slate-50">{inr(balanceSheet.total_equity)}</p>
+              <p className="mt-2 text-2xl font-semibold text-slate-900 dark:text-slate-50">{fmt(balanceSheet.total_equity)}</p>
             </div>
           </div>
           <div>
             <h2 className="mb-2 text-lg font-semibold text-slate-800 dark:text-slate-200">Assets</h2>
             <Table
               columns={['Code', 'Account', 'Amount']}
-              rows={balanceSheet.asset_lines.map((l) => [l.account_code, l.account_name, inr(l.amount)])}
+              rows={balanceSheet.asset_lines.map((l) => [l.account_code, l.account_name, fmt(l.amount)])}
               emptyText="No asset lines."
             />
           </div>
@@ -413,17 +415,17 @@ export default function ReportsPage() {
             <h2 className="mb-2 text-lg font-semibold text-slate-800 dark:text-slate-200">Liabilities</h2>
             <Table
               columns={['Code', 'Account', 'Amount']}
-              rows={balanceSheet.liability_lines.map((l) => [l.account_code, l.account_name, inr(l.amount)])}
+              rows={balanceSheet.liability_lines.map((l) => [l.account_code, l.account_name, fmt(l.amount)])}
               emptyText="No liability lines."
             />
           </div>
           <div>
             <h2 className="mb-2 text-lg font-semibold text-slate-800 dark:text-slate-200">
-              Equity <span className="font-normal text-slate-400">(incl. retained earnings {inr(balanceSheet.retained_earnings)})</span>
+              Equity <span className="font-normal text-slate-400">(incl. retained earnings {fmt(balanceSheet.retained_earnings)})</span>
             </h2>
             <Table
               columns={['Code', 'Account', 'Amount']}
-              rows={balanceSheet.equity_lines.map((l) => [l.account_code, l.account_name, inr(l.amount)])}
+              rows={balanceSheet.equity_lines.map((l) => [l.account_code, l.account_name, fmt(l.amount)])}
               emptyText="No equity lines."
             />
           </div>
@@ -437,11 +439,11 @@ export default function ReportsPage() {
             rows={supplierPurchaseReturns.map((r) => [
               r.supplier_name,
               r.purchase_count.toString(),
-              inr(r.purchase_value),
+              fmt(r.purchase_value),
               r.return_count.toString(),
-              inr(r.return_value),
+              fmt(r.return_value),
               <span key={r.supplier_id} className={r.net_value >= 0 ? 'text-emerald-600' : 'text-red-600'}>
-                {inr(r.net_value)}
+                {fmt(r.net_value)}
               </span>,
             ])}
             emptyText="No purchase or return activity in this period."
@@ -466,10 +468,10 @@ export default function ReportsPage() {
               columns={['Date', 'Purchases', 'Returns', 'Net']}
               rows={supplierLedger.map((r) => [
                 formatDate(r.date),
-                inr(r.purchase_value),
-                inr(r.return_value),
+                fmt(r.purchase_value),
+                fmt(r.return_value),
                 <span key={r.date} className={r.net_value >= 0 ? 'text-emerald-600' : 'text-red-600'}>
-                  {inr(r.net_value)}
+                  {fmt(r.net_value)}
                 </span>,
               ])}
               emptyText="No activity for this supplier in the period."

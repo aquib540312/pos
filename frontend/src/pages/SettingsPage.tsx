@@ -18,6 +18,7 @@ export default function SettingsPage() {
     phone: '',
     address: '',
     footer_note: '',
+    tax_mode: 'saudi',
   })
   const [profileError, setProfileError] = useState<string | null>(null)
   const [profileMessage, setProfileMessage] = useState<string | null>(null)
@@ -38,6 +39,7 @@ export default function SettingsPage() {
           phone: data.phone ?? '',
           address: data.address ?? '',
           footer_note: data.footer_note ?? '',
+          tax_mode: data.tax_mode ?? 'saudi',
         })
       })
       .catch(() => setProfile(null))
@@ -78,7 +80,7 @@ export default function SettingsPage() {
       setProfileError('Legal name is required.')
       return
     }
-    if (!/^[A-Z]{2}$/i.test(profileForm.default_state_code)) {
+    if (profileForm.tax_mode === 'india' && !/^[A-Z]{2}$/i.test(profileForm.default_state_code)) {
       setProfileError('State code must be a 2-letter code, e.g. MH.')
       return
     }
@@ -103,6 +105,7 @@ export default function SettingsPage() {
         phone: profileForm.phone.trim() || null,
         address: profileForm.address.trim() || null,
         footer_note: profileForm.footer_note.trim() || null,
+        tax_mode: profileForm.tax_mode,
       })
       setProfile(data)
       setProfileMessage('Business profile updated. Receipts will use the new details.')
@@ -183,13 +186,34 @@ export default function SettingsPage() {
             <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">VAT Number</label>
             <input value={profileForm.vat_number} onChange={(e) => setProfileForm({ ...profileForm, vat_number: e.target.value })} className={inputClass} placeholder="VAT registration number" />
           </div>
+          {profileForm.tax_mode === 'india' && (
+            <>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">PAN</label>
+                <input value={profileForm.pan} onChange={(e) => setProfileForm({ ...profileForm, pan: e.target.value.toUpperCase() })} className={inputClass} maxLength={10} placeholder="ABCDE1234F" />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">State code *</label>
+                <input required value={profileForm.default_state_code} onChange={(e) => setProfileForm({ ...profileForm, default_state_code: e.target.value.toUpperCase() })} className={inputClass} maxLength={2} placeholder="e.g. MH" />
+              </div>
+            </>
+          )}
+          {profileForm.tax_mode === 'saudi' && (
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">Region code</label>
+              <input value={profileForm.default_state_code} onChange={(e) => setProfileForm({ ...profileForm, default_state_code: e.target.value.toUpperCase() })} className={inputClass} maxLength={2} placeholder="e.g. 01" />
+            </div>
+          )}
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">PAN</label>
-            <input value={profileForm.pan} onChange={(e) => setProfileForm({ ...profileForm, pan: e.target.value.toUpperCase() })} className={inputClass} maxLength={10} placeholder="ABCDE1234F" />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">State code *</label>
-            <input required value={profileForm.default_state_code} onChange={(e) => setProfileForm({ ...profileForm, default_state_code: e.target.value.toUpperCase() })} className={inputClass} maxLength={2} placeholder="e.g. MH" />
+            <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">Country Mode</label>
+            <select
+              value={profileForm.tax_mode}
+              onChange={(e) => setProfileForm({ ...profileForm, tax_mode: e.target.value })}
+              className={inputClass}
+            >
+              <option value="saudi">Saudi Arabia (VAT 15%)</option>
+              <option value="india">India (GST)</option>
+            </select>
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">Phone</label>

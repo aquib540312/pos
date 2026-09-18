@@ -15,12 +15,29 @@ const INDIAN_STATE_CODES: { code: string; name: string }[] = [
   { code: '19', name: 'West Bengal' },
 ]
 
+const SAUDI_REGIONS: { code: string; name: string }[] = [
+  { code: '01', name: 'Riyadh (الرياض)' },
+  { code: '02', name: 'Makkah (مكة المكرمة)' },
+  { code: '03', name: 'Eastern Province (المنطقة الشرقية)' },
+  { code: '04', name: 'Asir (عسير)' },
+  { code: '05', name: 'Al Madinah (المدينة المنورة)' },
+  { code: '06', name: 'Qassim (القصيم)' },
+  { code: '07', name: 'Tabuk (تبوك)' },
+  { code: '08', name: 'Hail (حائل)' },
+  { code: '09', name: 'Jizan (جازان)' },
+  { code: '10', name: 'Najran (نجران)' },
+  { code: '11', name: 'Al Bahah (الباحة)' },
+  { code: '12', name: 'Al Jawf (الجوف)' },
+  { code: '13', name: 'Northern Borders (الحدود الشمالية)' },
+]
+
 export default function SignupPage() {
   const [plans, setPlans] = useState<Plan[]>([])
   const [legalName, setLegalName] = useState('')
   const [tradeName, setTradeName] = useState('')
   const [vatNumber, setVatNumber] = useState('')
-  const [stateCode, setStateCode] = useState('27')
+  const [taxMode, setTaxMode] = useState('saudi')
+  const [stateCode, setStateCode] = useState('01')
   const [branchName, setBranchName] = useState('Main Store')
   const [adminFullName, setAdminFullName] = useState('')
   const [adminEmail, setAdminEmail] = useState('')
@@ -50,6 +67,7 @@ export default function SignupPage() {
         admin_email: adminEmail,
         admin_password: adminPassword,
         plan_code: planCode,
+        tax_mode: taxMode,
       })
       const token = resp.data.access_token as string
       useAuthStore.getState().setSession(token, {
@@ -111,7 +129,23 @@ export default function SignupPage() {
         <div className="mb-4 grid grid-cols-2 gap-3">
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
-              Home state
+              Country
+            </label>
+            <select
+              value={taxMode}
+              onChange={(e) => {
+                setTaxMode(e.target.value)
+                setStateCode(e.target.value === 'saudi' ? '01' : '27')
+              }}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100"
+            >
+              <option value="saudi">Saudi Arabia (VAT 15%)</option>
+              <option value="india">India (GST)</option>
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
+              {taxMode === 'saudi' ? 'Region' : 'Home state'}
             </label>
             <select
               required
@@ -119,11 +153,13 @@ export default function SignupPage() {
               onChange={(e) => setStateCode(e.target.value)}
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100"
             >
-              {INDIAN_STATE_CODES.map((s) => (
-                <option key={s.code} value={s.code}>
-                  {s.name}
-                </option>
-              ))}
+              {taxMode === 'saudi'
+                ? SAUDI_REGIONS.map((s) => (
+                    <option key={s.code} value={s.code}>{s.name}</option>
+                  ))
+                : INDIAN_STATE_CODES.map((s) => (
+                    <option key={s.code} value={s.code}>{s.name}</option>
+                  ))}
             </select>
           </div>
           <div>

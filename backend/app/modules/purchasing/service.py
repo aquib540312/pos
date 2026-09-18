@@ -4,7 +4,7 @@ from datetime import date, datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.exceptions import ConflictError, NotFoundError, ValidationError
+from app.core.exceptions import ConflictError, NotFoundError, ValidationError, InsufficientStockError
 from app.core.numbering import next_document_number
 from app.models.catalog import Product, ProductBatch
 from app.models.organization import Branch, Warehouse
@@ -81,6 +81,10 @@ class PurchasingService:
         line (from the product's HSN rate unless overridden), so Input
         VAT credit can be posted to the ledger. This is the
         single transaction boundary where purchased stock becomes sellable."""
+        supplier = self.db.get(Supplier, supplier_id)
+        if supplier is None or supplier.organization_id != organization_id:
+            raise NotFoundError(f"Supplier {supplier_id} not found")
+
         grn = GoodsReceipt(
             organization_id=organization_id,
             purchase_order_id=purchase_order_id,
@@ -110,9 +114,11 @@ class PurchasingService:
             effective_unit_cost = (gross_value - discount_amount) / total_qty if total_qty else 0.0
 
             product = self.db.get(Product, item["product_id"])
-            hsn_code_id = product.hsn_code_id if product else None
+            if product is None:
+                raise NotFoundError(f"Product {item['product_id']} not found")
+            hsn_code_id = product.hsn_code_id
             tax_rate_percent = item.get("tax_rate_percent")
-            if tax_rate_percent is None and product is not None and product.hsn_code_id is not None:
+            if tax_rate_percent is None and product.hsn_code_id is not None:
                 rate = HSNRepository(self.db).get_effective_tax_rate(product.hsn_code_id, grn.received_at.date())
                 tax_rate_percent = float(rate.rate_percent) if rate else 0.0
             tax_rate_percent = float(tax_rate_percent or 0.0)
@@ -142,21 +148,27 @@ class PurchasingService:
                 discount_amount=discount_amount,
                 hsn_code_id=hsn_code_id,
                 tax_rate_percent=tax_rate_percent,
+                cgst_amount=0,
+                sgst_amount=0,
+                igst_amount=0,
                 vat_amount=breakdown.vat_amount,
             )
             self.db.add(grn_item)
             self.db.flush()
 
-            self.inventory.receive(
-                organization_id=organization_id,
-                warehouse_id=warehouse_id,
-                product_id=item["product_id"],
-                batch_id=batch.id,
-                quantity=total_qty,
-                movement_type="purchase_receipt",
-                reference_type="goods_receipt",
-                reference_id=grn.id,
-            )
+            try:
+                self.inventory.receive(
+                    organization_id=organization_id,
+                    warehouse_id=warehouse_id,
+                    product_id=item["product_id"],
+                    batch_id=batch.id,
+                    quantity=total_qty,
+                    movement_type="purchase_receipt",
+                    reference_type="goods_receipt",
+                    reference_id=grn.id,
+                )
+            except ValueError as exc:
+                raise ValidationError(str(exc)) from exc
 
             po_item = po_items_by_product.get(item["product_id"])
             if po_item is not None:
@@ -169,7 +181,6 @@ class PurchasingService:
         if po is not None and all(float(i.quantity_received) >= float(i.quantity_ordered) for i in po.items):
             po.status = "received"
 
-        supplier = self.db.get(Supplier, supplier_id)
         supplier.payable_balance = float(supplier.payable_balance) + total_cost + total_input_vat
         self.accounting.post_goods_receipt(grn, total_cost, total_input_vat)
 
@@ -298,6 +309,15 @@ class PurchasingService:
                 batch_id = grn_item.batch_id
                 if batch_id is None:
                     raise ValidationError("The linked GRN line has no batch to return from")
+            if batch_id is None:
+                from app.models.catalog import ProductBatch
+                stmt = select(ProductBatch.id).where(
+                    ProductBatch.organization_id == organization_id,
+                    ProductBatch.product_id == item["product_id"],
+                ).order_by(ProductBatch.created_at).limit(1)
+                batch_id = self.db.execute(stmt).scalar_one_or_none()
+                if batch_id is None:
+                    raise ValidationError(f"No stock batch found for product {item['product_id']}")
 
             self.inventory.issue(
                 organization_id, warehouse_id, item["product_id"], batch_id, float(item["quantity"]),
@@ -307,8 +327,9 @@ class PurchasingService:
             unit_cost = float(item.get("unit_cost") or 0.0)
             taxable_value = round(float(item["quantity"]) * unit_cost, 2)
             if grn_item is not None:
-                fraction = float(item["quantity"]) / float(grn_item.quantity)
-                discounted_taxable = float(grn_item.quantity) * float(grn_item.unit_cost) - float(grn_item.discount_amount)
+                grn_paid_qty = float(grn_item.quantity) - float(grn_item.free_quantity)
+                fraction = float(item["quantity"]) / grn_paid_qty if grn_paid_qty else 0
+                discounted_taxable = grn_paid_qty * float(grn_item.unit_cost) - float(grn_item.discount_amount)
                 taxable_value = round(discounted_taxable * fraction, 2)
                 vat_amount = round(float(grn_item.vat_amount) * fraction, 2)
             else:
@@ -331,7 +352,7 @@ class PurchasingService:
             return_total += line_total
 
         purchase_return.return_total = round(return_total, 2)
-        supplier.payable_balance = max(0.0, float(supplier.payable_balance) - return_total)
+        supplier.payable_balance = float(supplier.payable_balance) - return_total
         self.accounting.post_purchase_return(
             organization_id, purchase_return.id, purchase_return.return_date.date(),
             purchase_return.return_number,

@@ -11,12 +11,15 @@ from app.models.rbac import User
 from app.modules.reports.schemas import (
     BalanceSheetResponse,
     CashierSalesRow,
+    CustomerStatementRow,
     DashboardResponse,
     ExpiringStockRow,
     GSTR1LineRow,
     LowStockRow,
     PaymentMethodBreakdownRow,
     ProfitAndLossResponse,
+    SalesByBeefCutRow,
+    SalesByCustomerTypeRow,
     SalesSummaryResponse,
     StockLedgerRow,
     StockSummaryRow,
@@ -24,6 +27,7 @@ from app.modules.reports.schemas import (
     SupplierPurchaseReturnLedgerRow,
     SupplierPurchaseReturnRow,
     TopProductRow,
+    WasteReportRow,
 )
 from app.modules.reports.service import ReportService
 
@@ -160,3 +164,42 @@ def supplier_purchase_return_ledger(
     user: User = Depends(require_permission(Perm.REPORTS_VIEW)),
 ):
     return ReportService(db).supplier_purchase_return_ledger(user.organization_id, supplier_id, start, end)
+
+
+@router.get("/sales-by-beef-cut", response_model=list[SalesByBeefCutRow])
+def sales_by_beef_cut(
+    period_start: date = Query(...),
+    period_end: date = Query(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission(Perm.REPORTS_VIEW)),
+):
+    return ReportService(db).sales_by_beef_cut(user.organization_id, period_start, period_end)
+
+
+@router.get("/sales-by-customer-type", response_model=list[SalesByCustomerTypeRow])
+def sales_by_customer_type(
+    period_start: date = Query(...),
+    period_end: date = Query(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission(Perm.REPORTS_VIEW)),
+):
+    return ReportService(db).sales_by_customer_type(user.organization_id, period_start, period_end)
+
+
+@router.get("/waste-summary", response_model=list[WasteReportRow])
+def waste_summary(
+    period_start: date = Query(...),
+    period_end: date = Query(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission(Perm.REPORTS_VIEW)),
+):
+    return ReportService(db).waste_summary(user.organization_id, period_start, period_end)
+
+
+@router.get("/customer-statement/{customer_id}", response_model=list[CustomerStatementRow])
+def customer_statement(
+    customer_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission(Perm.REPORTS_VIEW)),
+):
+    return ReportService(db).customer_statement(user.organization_id, customer_id)

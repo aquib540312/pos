@@ -6,7 +6,7 @@ export default function SuppliersPage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [showForm, setShowForm] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [form, setForm] = useState({ name: '', phone: '', email: '', vat_number: '' })
+  const [form, setForm] = useState({ name: '', name_arabic: '', phone: '', email: '', vat_number: '', cr_number: '', address: '' })
   const [payFor, setPayFor] = useState<Supplier | null>(null)
   const [payments, setPayments] = useState<SupplierPayment[]>([])
 
@@ -25,11 +25,14 @@ export default function SuppliersPage() {
     try {
       await apiClient.post('/party/suppliers', {
         name: form.name,
+        name_arabic: form.name_arabic || null,
         phone: form.phone || null,
         email: form.email || null,
         vat_number: form.vat_number || null,
+        cr_number: form.cr_number || null,
+        address: form.address || null,
       })
-      setForm({ name: '', phone: '', email: '', vat_number: '' })
+      setForm({ name: '', name_arabic: '', phone: '', email: '', vat_number: '', cr_number: '', address: '' })
       setShowForm(false)
       load()
     } catch (err) {
@@ -58,12 +61,15 @@ export default function SuppliersPage() {
       {showForm && (
         <form
           onSubmit={handleCreate}
-          className="mb-6 grid grid-cols-2 gap-3 rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-800 md:grid-cols-3"
+          className="mb-6 grid grid-cols-2 gap-3 rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-800 md:grid-cols-3 lg:grid-cols-4"
         >
           <input required placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100" />
+          <input placeholder="Arabic name" value={form.name_arabic} onChange={(e) => setForm({ ...form, name_arabic: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100" />
           <input placeholder="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100" />
           <input placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100" />
           <input placeholder="VAT Number" value={form.vat_number} onChange={(e) => setForm({ ...form, vat_number: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100" />
+          <input placeholder="CR Number" value={form.cr_number} onChange={(e) => setForm({ ...form, cr_number: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100" />
+          <input placeholder="Address" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100" />
           {error && <p className="col-span-full text-sm text-red-600 dark:text-red-400">{error}</p>}
           <button type="submit" className="col-span-full rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500">
             Save supplier
@@ -76,8 +82,10 @@ export default function SuppliersPage() {
           <thead className="border-b border-slate-200 text-slate-500 dark:border-slate-700 dark:text-slate-400">
             <tr>
               <th className="px-4 py-3">Name</th>
+              <th className="px-4 py-3">Arabic Name</th>
               <th className="px-4 py-3">Phone</th>
               <th className="px-4 py-3">VAT Number</th>
+              <th className="px-4 py-3">Address</th>
               <th className="px-4 py-3">Payable Balance</th>
               <th className="px-4 py-3 text-right">Actions</th>
             </tr>
@@ -86,8 +94,10 @@ export default function SuppliersPage() {
             {suppliers.map((s) => (
               <tr key={s.id} className="border-b border-slate-100 last:border-0 dark:border-slate-700">
                 <td className="px-4 py-3 font-medium text-slate-900 dark:text-slate-100">{s.name}</td>
-                <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{s.phone ?? '-'}</td>
-                <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{s.vat_number ?? '-'}</td>
+                <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{s.name_arabic ?? '—'}</td>
+                <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{s.phone ?? '—'}</td>
+                <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{s.vat_number ?? '—'}</td>
+                <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{s.address ?? '—'}</td>
                 <td className="px-4 py-3 text-slate-600 dark:text-slate-300">SAR {s.payable_balance.toFixed(2)}</td>
                 <td className="px-4 py-3 text-right">
                   <button
@@ -102,7 +112,7 @@ export default function SuppliersPage() {
             ))}
             {suppliers.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-slate-400">
+                <td colSpan={7} className="px-4 py-6 text-center text-slate-400">
                   No suppliers found.
                 </td>
               </tr>
@@ -241,7 +251,7 @@ function SupplierPaymentModal({
                 {p.reference && <p className="text-xs text-slate-400">{p.reference}</p>}
               </div>
               <div className="text-right">
-                <p className="text-xs text-slate-400">{new Date(p.paid_at).toLocaleString('en-IN')}</p>
+                <p className="text-xs text-slate-400">{new Date(p.paid_at).toLocaleString('en-SA')}</p>
                 <p className="text-xs text-slate-500 dark:text-slate-400">Outstanding: SAR {p.outstanding_payable.toFixed(2)}</p>
               </div>
             </div>

@@ -59,6 +59,7 @@ def signup(payload: SignupRequest, db: Session = Depends(get_db)) -> TokenRespon
             trade_name=payload.trade_name,
             default_state_code=payload.default_state_code,
             gstin=payload.gstin,
+            vat_number=payload.vat_number,
             branch_code=payload.branch_code,
             branch_name=payload.branch_name,
             admin_full_name=payload.admin_full_name,
@@ -162,7 +163,7 @@ def set_user_active(
     current_user: User = Depends(require_permission(Perm.USERS_MANAGE)),
 ) -> UserResponse:
     try:
-        user = AuthService(db).set_active(current_user.id, user_id, payload.is_active)
+        user = AuthService(db).set_active(current_user.organization_id, current_user.id, user_id, payload.is_active)
         action = "user.activate" if payload.is_active else "user.deactivate"
         write_audit_log(db, current_user.organization_id, current_user.id, action, "user", user.id)
         db.commit()
@@ -183,7 +184,7 @@ def update_user_roles(
     current_user: User = Depends(require_permission(Perm.USERS_MANAGE)),
 ) -> UserResponse:
     try:
-        user = AuthService(db).update_roles(user_id, payload.role_ids)
+        user = AuthService(db).update_roles(current_user.organization_id, user_id, payload.role_ids)
         write_audit_log(db, current_user.organization_id, current_user.id, "user.roles_update", "user", user.id)
         db.commit()
     except NotFoundError as exc:

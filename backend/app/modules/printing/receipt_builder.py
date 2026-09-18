@@ -36,7 +36,7 @@ def render_receipt(printer: EscposPrinter, invoice: dict) -> None:
         if business.get("phone"):
             printer.text(f"Tel: {business['phone'][:32]}\n")
         if business.get("gstin"):
-            printer.text(f"GSTIN: {business['gstin'][:32]}\n")
+            printer.text(f"VAT: {business['gstin'][:32]}\n")
         printer.text("-" * 32 + "\n")
 
     printer.set(align="center", bold=True, width=2, height=2)
@@ -49,7 +49,7 @@ def render_receipt(printer: EscposPrinter, invoice: dict) -> None:
     printer.set(align="left")
     for item in invoice["items"]:
         printer.text(f"{item['product_name'][:32]}\n")
-        _line(printer, f"  {item['quantity']} x Rs.{item['unit_price']:.2f}", item["line_total"])
+        _line(printer, f"  {item['quantity']} x SAR.{item['unit_price']:.2f}", item["line_total"])
 
     printer.text("-" * 32 + "\n")
     _line(printer, "Taxable value", invoice["taxable_total"])

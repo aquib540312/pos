@@ -3,15 +3,22 @@ export interface Product {
   sku: string
   barcode: string | null
   name: string
+  name_arabic: string | null
   brand: string | null
   category_id: string | null
   category_name: string | null
   uom_id: string
   hsn_code_id: string | null
+  supplier_id: string | null
   mrp: number
   sale_price: number
   wholesale_price: number
+  restaurant_price: number
+  vip_price: number
   purchase_price: number
+  cost_per_kg: number
+  selling_price_per_kg: number
+  minimum_selling_quantity: number
   tax_rate_percent: number | null
   tracks_batches: boolean
   tracks_serials: boolean
@@ -28,6 +35,11 @@ export interface Product {
   variant_label: string | null
   image_path: string | null
   aliases: string[]
+  beef_cut: string | null
+  fresh_frozen: string | null
+  local_imported: string | null
+  country_of_origin: string | null
+  storage_location: string | null
 }
 
 export interface Category {
@@ -54,24 +66,48 @@ export interface BulkImportResponse {
 export interface Customer {
   id: string
   name: string
+  name_arabic: string | null
   phone: string | null
   email: string | null
-  gstin: string | null
+  vat_number: string | null
+  cr_number: string | null
   state_code: string | null
+  address: string | null
+  customer_type: string
+  price_level: string
   is_credit_customer: boolean
   credit_limit: number
   credit_balance: number
+  payment_terms_days: number
+  outstanding_balance: number
+  total_purchases: number
+  last_purchase_date: string | null
   loyalty_points_balance: number
+  is_active: boolean
+}
+
+export interface CustomerPayment {
+  id: string
+  customer_id: string
+  amount: number
+  method: string
+  reference: string | null
+  paid_at: string
+  note: string | null
 }
 
 export interface Supplier {
   id: string
   name: string
+  name_arabic: string | null
   phone: string | null
   email: string | null
-  gstin: string | null
+  vat_number: string | null
+  cr_number: string | null
   state_code: string | null
+  address: string | null
   payable_balance: number
+  is_active: boolean
 }
 
 export interface SupplierPurchaseReturnRow {
@@ -117,16 +153,17 @@ export interface GoodsReceiptItem {
   free_quantity: number
   unit_cost: number
   discount_amount: number
+  hsn_code_id?: string | null
   tax_rate_percent?: number
-  cgst_amount?: number
-  sgst_amount?: number
-  igst_amount?: number
+  vat_amount?: number
 }
 
 export interface GoodsReceipt {
   id: string
   grn_number: string
   supplier_id: string
+  warehouse_id?: string
+  purchase_order_id?: string | null
   received_at: string
   supplier_invoice_number?: string | null
   items: GoodsReceiptItem[]
@@ -172,6 +209,7 @@ export interface CartLine {
   product: Product
   quantity: number
   discountAmount: number
+  unitPrice: number
 }
 
 export interface PaymentLine {
@@ -183,6 +221,7 @@ export interface PaymentLine {
 export interface SaleInvoiceItem {
   id: string
   product_id: string
+  product_name?: string
   quantity: number
   unit_price: number
   discount_amount: number
@@ -528,10 +567,14 @@ export interface OrgProfile {
   id: string
   legal_name: string
   trade_name: string
+  gstin: string | null
+  pan: string | null
+  default_state_code: string
   vat_number: string | null
   phone: string | null
   address: string | null
   footer_note: string | null
+  tax_mode: string
   has_logo: boolean
 }
 
@@ -586,4 +629,71 @@ export interface DiningOrderEstimate {
   round_off: number
   grand_total: number
   items: DiningOrderItem[]
+}
+
+export interface WasteEntry {
+  id: string
+  product_id: string
+  product_name: string
+  quantity: number
+  unit_cost: number
+  total_cost: number
+  reason: string
+  notes: string | null
+  recorded_by: string | null
+  created_at: string
+}
+
+export interface CuttingOrderItem {
+  id: string
+  product_id: string
+  product_name: string
+  output_weight: number
+  waste_weight: number
+}
+
+export interface CuttingOrder {
+  id: string
+  source_product_id: string
+  source_product_name: string
+  input_weight: number
+  butcher_name: string | null
+  cutting_date: string | null
+  status: string
+  notes: string | null
+  items: CuttingOrderItem[]
+  created_at: string
+}
+
+export interface SalesByBeefCutRow {
+  beef_cut: string
+  product_count: number
+  quantity_sold: number
+  revenue: number
+}
+
+export interface SalesByCustomerTypeRow {
+  customer_type: string
+  invoice_count: number
+  total_revenue: number
+  total_vat: number
+}
+
+export interface WasteReportRow {
+  product_id: string
+  product_name: string
+  reason: string
+  total_quantity: number
+  total_cost: number
+  entry_count: number
+}
+
+export interface CustomerStatementRow {
+  invoice_id: string
+  invoice_number: string
+  invoice_date: string
+  grand_total: number
+  paid_amount: number
+  outstanding: number
+  payment_method: string
 }

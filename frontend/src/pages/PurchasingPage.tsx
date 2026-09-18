@@ -367,7 +367,7 @@ function PurchaseReturnsTab({
           />
           <p className="mb-2 text-xs text-slate-400">
             Pick an invoice (GRN) above to load its lines for return, or add products manually. Stock is issued from the
-            selected warehouse and the supplier's payable balance is reduced by the returned value (including GST on the
+            selected warehouse and the supplier's payable balance is reduced by the returned value (including tax on the
             returned lines).
           </p>
 <ProductPicker onPick={addProduct} />
@@ -438,7 +438,7 @@ function PurchaseReturnsTab({
             {retProductSummary.map((r) => (
               <li key={r.ret.id} className="flex justify-between">
                 <span>
-                  {r.ret.return_number} · {supplierName(r.ret.supplier_id)} · {new Date(r.ret.return_date).toLocaleDateString('en-IN')}
+                   {r.ret.return_number} · {supplierName(r.ret.supplier_id)} · {new Date(r.ret.return_date).toLocaleDateString('en-SA')}
                 </span>
                 <span className="font-semibold">{r.qty.toFixed(3)} units</span>
               </li>
@@ -470,7 +470,7 @@ function PurchaseReturnsTab({
                   <td className="px-4 py-3 text-slate-600 dark:text-slate-300">
                     {grn ? (grn.supplier_invoice_number ? `INV ${grn.supplier_invoice_number}` : grn.grn_number) : '-'}
                   </td>
-                  <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{new Date(r.return_date).toLocaleString('en-IN')}</td>
+                   <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{new Date(r.return_date).toLocaleString('en-SA')}</td>
                   <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{r.reason ?? '-'}</td>
                   <td className="px-4 py-3 text-right font-medium text-slate-900 dark:text-slate-100">SAR {r.return_total.toFixed(2)}</td>
                   <td className="px-4 py-3 text-right">
@@ -1128,6 +1128,7 @@ function GoodsReceiptsTab({
   const [showForm, setShowForm] = useState(false)
   const [supplierId, setSupplierId] = useState('')
   const [purchaseOrderId, setPurchaseOrderId] = useState('')
+  const [supplierInvoiceNumber, setSupplierInvoiceNumber] = useState('')
   const [items, setItems] = useState<DraftItem[]>([])
   const [busy, setBusy] = useState(false)
   const [viewDoc, setViewDoc] = useState<GoodsReceipt | null>(null)
@@ -1219,17 +1220,19 @@ function GoodsReceiptsTab({
         warehouse_id: warehouse.id,
         supplier_id: supplierId,
         purchase_order_id: purchaseOrderId || null,
+        supplier_invoice_number: supplierInvoiceNumber || null,
         items: items.map((it) => ({
           product_id: it.product_id,
-          quantity: Number(it.quantity),
+          quantity: Number(it.quantity) || 0,
           free_quantity: Number(it.free_quantity || 0),
-          unit_cost: Number(it.unit_cost),
+          unit_cost: Number(it.unit_cost) || 0,
           discount_amount: Number(it.discount_amount || 0),
         })),
       })
       setItems([])
       setSupplierId('')
       setPurchaseOrderId('')
+      setSupplierInvoiceNumber('')
       setShowForm(false)
       onCreated()
     } catch (err) {
@@ -1306,7 +1309,7 @@ function GoodsReceiptsTab({
                 <span>
                   {r.grn.supplier_invoice_number ? `INV ${r.grn.supplier_invoice_number} ` : ''}
                   {r.grn.grn_number} · {supplierName(r.grn.supplier_id)} ·{' '}
-                  {new Date(r.grn.received_at).toLocaleDateString('en-IN')}
+                   {new Date(r.grn.received_at).toLocaleDateString('en-SA')}
                 </span>
                 <span className="font-semibold">{r.qty.toFixed(3)} units</span>
               </li>
@@ -1349,6 +1352,12 @@ function GoodsReceiptsTab({
               ))}
             </select>
           </div>
+          <input
+            placeholder="Supplier invoice number (optional)"
+            value={supplierInvoiceNumber}
+            onChange={(e) => setSupplierInvoiceNumber(e.target.value)}
+            className="mb-3 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100"
+          />
           <ProductPicker onPick={addProduct} />
           <div className="mt-3">
             <ItemsTable items={items} onChange={updateItem} onRemove={removeItem} costLabel="Unit Cost" showFreeQty showDiscount />
@@ -1388,7 +1397,7 @@ function GoodsReceiptsTab({
                   )}
                 </td>
                 <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{supplierName(g.supplier_id)}</td>
-                <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{new Date(g.received_at).toLocaleString('en-IN')}</td>
+                <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{new Date(g.received_at).toLocaleString('en-SA')}</td>
                 <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{g.items.length}</td>
                 <td className="px-4 py-3 text-right">
                   <button
@@ -1557,7 +1566,7 @@ function GrnDocument({
 }) {
   const rows = doc.items.map((i) => {
     const paidQty = i.quantity - (i.free_quantity ?? 0)
-    const taxable = i.quantity * i.unit_cost - (i.discount_amount ?? 0)
+    const taxable = paidQty * i.unit_cost - (i.discount_amount ?? 0)
     const vat = i.vat_amount ?? 0
     return { i, paidQty, taxable, vat, total: taxable + vat }
   })
@@ -1568,7 +1577,7 @@ function GrnDocument({
       <DocHeader
         title={title}
         number={doc.grn_number}
-        date={new Date(doc.received_at).toLocaleString('en-IN')}
+        date={new Date(doc.received_at).toLocaleString('en-SA')}
         supplier={supplierName}
         extra={doc.supplier_invoice_number ? `Supplier Invoice: ${doc.supplier_invoice_number}` : undefined}
       />
@@ -1605,13 +1614,13 @@ function ReturnDocument({
   productNames: Record<string, string>
   title: string
 }) {
-  const gstOf = (i: PurchaseReturnItem) => i.vat_amount ?? 0
+  const vatOf = (i: PurchaseReturnItem) => i.vat_amount ?? 0
   return (
     <div>
       <DocHeader
         title={title}
         number={doc.return_number}
-        date={new Date(doc.return_date).toLocaleString('en-IN')}
+        date={new Date(doc.return_date).toLocaleString('en-SA')}
         supplier={supplierName}
         extra={doc.is_debit_note ? 'Debit Note' : 'Credit Note'}
       />
@@ -1627,7 +1636,7 @@ function ReturnDocument({
             <td className="py-1 pr-2">{i.quantity}</td>
             <td className="py-1 pr-2">{i.unit_cost.toFixed(2)}</td>
             <td className="py-1 pr-2">{i.taxable_value.toFixed(2)}</td>
-            <td className="py-1 pr-2">{gstOf(i).toFixed(2)}</td>
+            <td className="py-1 pr-2">{vatOf(i).toFixed(2)}</td>
             <td className="py-1 pr-2 font-medium">{i.line_total.toFixed(2)}</td>
           </tr>
         ))}

@@ -158,6 +158,9 @@ class ProductUpdateRequest(BaseModel):
     remove_brand: bool = False
     remove_variant: bool = False
     aliases: list[str] | None = None
+    tracks_batches: bool | None = None
+    tracks_serials: bool | None = None
+    tracks_expiry: bool | None = None
     # Beef-specific fields
     beef_cut: str | None = Field(default=None, max_length=100)
     fresh_frozen: str | None = Field(default=None, max_length=20)

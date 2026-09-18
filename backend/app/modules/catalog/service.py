@@ -298,17 +298,22 @@ class CatalogService:
                 raise ConflictError(f"Barcode '{barcode}' already exists")
             product.barcode = barcode
 
+        old_sale_price = float(product.sale_price) if product.sale_price is not None else None
+
         for key in ("name", "name_arabic", "description", "category_id", "hsn_code_id", "uom_id", "supplier_id",
                     "mrp", "sale_price", "purchase_price", "reorder_level", "is_active",
                     "brand", "wholesale_price", "restaurant_price", "vip_price",
                     "cost_per_kg", "selling_price_per_kg", "minimum_selling_quantity",
                     "low_stock_notify", "is_weighted",
                     "loyalty_exempt", "prices_gst_inclusive", "parent_product_id", "variant_label",
+                    "tracks_batches", "tracks_serials", "tracks_expiry",
                     "beef_cut", "fresh_frozen", "local_imported", "country_of_origin", "storage_location"):
             if fields.get(key) is not None:
                 setattr(product, key, fields[key])
 
-        if fields.get("prices_gst_inclusive") and fields.get("sale_price") is not None:
+        new_sale_price = fields.get("sale_price")
+        if (fields.get("prices_gst_inclusive") and new_sale_price is not None
+                and old_sale_price is not None and float(new_sale_price) != old_sale_price):
             product.sale_price = self._derive_gst_exclusive_price(product.hsn_code_id, product.sale_price)
         if "aliases" in fields and fields["aliases"] is not None:
             self._assign_product_aliases(product, fields["aliases"])

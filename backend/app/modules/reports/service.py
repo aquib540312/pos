@@ -15,11 +15,16 @@ from app.models.purchasing import GoodsReceipt, GoodsReceiptItem, PurchaseReturn
 from app.models.rbac import User
 from app.models.sales import SalesInvoice, SalesInvoiceItem
 from app.models.sync import SyncConflict
+try:
+    from app.models.waste import WasteEntry
+except ImportError:
+    WasteEntry = None  # type: ignore[assignment, misc]
 from app.modules.gst_filing.schema_builder import B2BInvoiceLine, B2BInvoiceRateItem, B2CSLine
 from app.modules.notifications.service import NotificationService
 from app.modules.reports.schemas import (
     BalanceSheetResponse,
     CashierSalesRow,
+    CustomerStatementRow,
     DashboardResponse,
     ExpiringStockRow,
     GSTR1LineRow,
@@ -27,6 +32,8 @@ from app.modules.reports.schemas import (
     LowStockRow,
     PaymentMethodBreakdownRow,
     ProfitAndLossResponse,
+    SalesByBeefCutRow,
+    SalesByCustomerTypeRow,
     SalesSummaryResponse,
     StockLedgerRow,
     StockSummaryRow,
@@ -34,6 +41,7 @@ from app.modules.reports.schemas import (
     SupplierPurchaseReturnLedgerRow,
     SupplierPurchaseReturnRow,
     TopProductRow,
+    WasteReportRow,
 )
 
 
@@ -107,7 +115,7 @@ class ReportService:
                 func.count(func.distinct(SalesInvoiceItem.invoice_id)),
             )
             .join(SalesInvoice, SalesInvoice.id == SalesInvoiceItem.invoice_id)
-            .join(HSNCode, HSNCode.id == SalesInvoiceItem.hsn_code_id)
+            .outerjoin(HSNCode, HSNCode.id == SalesInvoiceItem.hsn_code_id)
             .where(
                 SalesInvoice.organization_id == organization_id,
                 SalesInvoice.status == "posted",
@@ -663,3 +671,147 @@ class ReportService:
             )
             for day, values in sorted(daily.items())
         ]
+
+    def sales_by_beef_cut(
+        self, organization_id: uuid.UUID, start: date, end: date
+    ) -> list[SalesByBeefCutRow]:
+        start_dt, end_dt = ist_range_bounds_utc(start, end)
+        stmt = (
+            select(
+                Product.beef_cut,
+                func.count(func.distinct(Product.id)),
+                func.coalesce(func.sum(SalesInvoiceItem.quantity), 0),
+                func.coalesce(func.sum(SalesInvoiceItem.line_total), 0),
+            )
+            .join(SalesInvoiceItem, SalesInvoiceItem.product_id == Product.id)
+            .join(SalesInvoice, SalesInvoice.id == SalesInvoiceItem.invoice_id)
+            .where(
+                SalesInvoice.organization_id == organization_id,
+                SalesInvoice.status == "posted",
+                SalesInvoice.invoice_date >= start_dt,
+                SalesInvoice.invoice_date <= end_dt,
+                Product.beef_cut.is_not(None),
+            )
+            .group_by(Product.beef_cut)
+            .order_by(func.coalesce(func.sum(SalesInvoiceItem.line_total), 0).desc())
+        )
+        return [
+            SalesByBeefCutRow(
+                beef_cut=cut,
+                product_count=count,
+                quantity_sold=float(qty),
+                revenue=float(revenue),
+            )
+            for cut, count, qty, revenue in self.db.execute(stmt).all()
+        ]
+
+    def sales_by_customer_type(
+        self, organization_id: uuid.UUID, start: date, end: date
+    ) -> list[SalesByCustomerTypeRow]:
+        start_dt, end_dt = ist_range_bounds_utc(start, end)
+        stmt = (
+            select(
+                Customer.customer_type,
+                func.count(SalesInvoice.id),
+                func.coalesce(func.sum(SalesInvoice.grand_total), 0),
+                func.coalesce(func.sum(SalesInvoice.vat_total), 0),
+            )
+            .outerjoin(Customer, Customer.id == SalesInvoice.customer_id)
+            .where(
+                SalesInvoice.organization_id == organization_id,
+                SalesInvoice.status == "posted",
+                SalesInvoice.invoice_date >= start_dt,
+                SalesInvoice.invoice_date <= end_dt,
+            )
+            .group_by(Customer.customer_type)
+            .order_by(func.coalesce(func.sum(SalesInvoice.grand_total), 0).desc())
+        )
+        return [
+            SalesByCustomerTypeRow(
+                customer_type=ctype or "walk_in",
+                invoice_count=count,
+                total_revenue=float(revenue),
+                total_vat=float(vat),
+            )
+            for ctype, count, revenue, vat in self.db.execute(stmt).all()
+        ]
+
+    def waste_summary(
+        self, organization_id: uuid.UUID, start: date, end: date
+    ) -> list[WasteReportRow]:
+        if WasteEntry is None:
+            return []
+        start_dt, end_dt = ist_range_bounds_utc(start, end)
+        stmt = (
+            select(
+                WasteEntry.product_id,
+                Product.name,
+                WasteEntry.reason,
+                func.coalesce(func.sum(WasteEntry.quantity), 0),
+                func.coalesce(func.sum(WasteEntry.total_cost), 0),
+                func.count(WasteEntry.id),
+            )
+            .join(Product, Product.id == WasteEntry.product_id)
+            .where(
+                WasteEntry.organization_id == organization_id,
+                WasteEntry.created_at >= start_dt,
+                WasteEntry.created_at <= end_dt,
+            )
+            .group_by(WasteEntry.product_id, Product.name, WasteEntry.reason)
+            .order_by(func.coalesce(func.sum(WasteEntry.total_cost), 0).desc())
+        )
+        return [
+            WasteReportRow(
+                product_id=pid,
+                product_name=name,
+                reason=reason,
+                total_quantity=float(qty),
+                total_cost=float(cost),
+                entry_count=count,
+            )
+            for pid, name, reason, qty, cost, count in self.db.execute(stmt).all()
+        ]
+
+    def customer_statement(
+        self, organization_id: uuid.UUID, customer_id: uuid.UUID
+    ) -> list[CustomerStatementRow]:
+        stmt = (
+            select(SalesInvoice)
+            .where(
+                SalesInvoice.organization_id == organization_id,
+                SalesInvoice.customer_id == customer_id,
+                SalesInvoice.status == "posted",
+            )
+            .order_by(SalesInvoice.invoice_date.desc())
+        )
+        invoices = self.db.execute(stmt).scalars().all()
+        if not invoices:
+            return []
+        invoice_ids = [inv.id for inv in invoices]
+        payment_stmt = (
+            select(Payment.invoice_id, Payment.method, func.coalesce(func.sum(Payment.amount), 0))
+            .where(Payment.invoice_id.in_(invoice_ids))
+            .group_by(Payment.invoice_id, Payment.method)
+        )
+        payment_map: dict[uuid.UUID, tuple[float, str]] = {}
+        for inv_id, method, total in self.db.execute(payment_stmt).all():
+            if inv_id in payment_map:
+                prev_total, prev_method = payment_map[inv_id]
+                payment_map[inv_id] = (prev_total + float(total), f"{prev_method}+{method}")
+            else:
+                payment_map[inv_id] = (float(total), method)
+        rows: list[CustomerStatementRow] = []
+        for inv in invoices:
+            paid, method = payment_map.get(inv.id, (0.0, "credit"))
+            rows.append(
+                CustomerStatementRow(
+                    invoice_id=inv.id,
+                    invoice_number=inv.invoice_number,
+                    invoice_date=inv.invoice_date.strftime("%Y-%m-%d"),
+                    grand_total=float(inv.grand_total),
+                    paid_amount=paid,
+                    outstanding=round(float(inv.grand_total) - paid, 2),
+                    payment_method=method,
+                )
+            )
+        return rows

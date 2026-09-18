@@ -18,7 +18,7 @@ interface StaffUser {
 }
 
 function formatDateTime(iso: string) {
-  return new Date(iso).toLocaleString('en-IN')
+  return new Date(iso).toLocaleString('en-SA')
 }
 
 function formatDetails(raw: string | null) {

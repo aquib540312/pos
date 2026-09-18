@@ -149,6 +149,8 @@ class SalesService:
             invoice_date=datetime.now(timezone.utc),
             business_date=ist_today(),
             customer_vat_number=customer.vat_number if customer else None,
+            place_of_supply_state_code=branch.state_code or "27",
+            is_inter_state=False,
             is_credit_sale=is_credit_sale,
             status="posted",
         )
@@ -195,6 +197,10 @@ class SalesService:
                     discount_amount=line.get("discount_amount", 0),
                     taxable_value=breakdown.taxable_value,
                     tax_rate_percent=breakdown.tax_rate_percent,
+                    cgst_amount=0,
+                    sgst_amount=0,
+                    igst_amount=0,
+                    cess_amount=0,
                     vat_amount=breakdown.vat_amount,
                     line_total=breakdown.line_total,
                 )
@@ -342,6 +348,9 @@ class SalesService:
                     original_invoice_item_id=original_item.id,
                     quantity=line["quantity"],
                     taxable_value=taxable_value,
+                    cgst_amount=0,
+                    sgst_amount=0,
+                    igst_amount=0,
                     vat_amount=vat_amount,
                     line_total=line_total,
                 )
@@ -353,7 +362,7 @@ class SalesService:
         if refund_mode == "credit_note" and original_invoice.customer_id:
             customer = self.customers.get(original_invoice.customer_id)
             if customer is not None:
-                self.party.record_credit_payment(customer, refund_total)
+                self.party.record_credit_sale(customer, refund_total)
 
         self.db.flush()
         sales_return = self.returns.get(sales_return.id)

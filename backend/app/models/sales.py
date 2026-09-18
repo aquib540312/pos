@@ -10,6 +10,7 @@ from app.models.mixins import GUID, TimestampMixin, UUIDPKMixin, branch_fk, org_
 
 if TYPE_CHECKING:
     from app.models.billing import Payment
+    from app.models.catalog import Product
 
 
 class DocumentCounter(Base, UUIDPKMixin):
@@ -33,11 +34,12 @@ class DocumentCounter(Base, UUIDPKMixin):
 
 class Quotation(Base, UUIDPKMixin, TimestampMixin):
     __tablename__ = "quotations"
+    __table_args__ = (UniqueConstraint("organization_id", "quotation_number", name="uq_quotation_org_number"),)
 
     organization_id: Mapped[uuid.UUID] = org_fk()
     branch_id: Mapped[uuid.UUID] = branch_fk()
     customer_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("customers.id"), nullable=True)
-    quotation_number: Mapped[str] = mapped_column(String(40), nullable=False, unique=True)
+    quotation_number: Mapped[str] = mapped_column(String(40), nullable=False)
     quotation_date: Mapped[date] = mapped_column(Date, nullable=False)
     valid_until: Mapped[date | None] = mapped_column(Date)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="draft")  # draft|sent|converted|expired
@@ -69,23 +71,30 @@ class SalesInvoice(Base, UUIDPKMixin, TimestampMixin):
     through SalesReturn, never UPDATE. Customized for Saudi Arabia VAT (15%)."""
 
     __tablename__ = "sales_invoices"
+    __table_args__ = (UniqueConstraint("organization_id", "invoice_number", name="uq_sales_invoice_org_number"),)
 
     organization_id: Mapped[uuid.UUID] = org_fk()
     branch_id: Mapped[uuid.UUID] = branch_fk()
     customer_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("customers.id"), nullable=True)
     shift_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("shifts.id"), nullable=True)
 
-    invoice_number: Mapped[str] = mapped_column(String(40), nullable=False, unique=True)
+    invoice_number: Mapped[str] = mapped_column(String(40), nullable=False)
     invoice_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     business_date: Mapped[date] = mapped_column(Date, nullable=False)
 
     # Saudi Arabia doesn't have state-based GST like India
     # Using VAT number for B2B tracking
     customer_vat_number: Mapped[str | None] = mapped_column(String(15), nullable=True)
+    place_of_supply_state_code: Mapped[str] = mapped_column(String(2), nullable=False, default="27")
+    is_inter_state: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     subtotal: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
     discount_total: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
     taxable_total: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
+    cgst_total: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
+    sgst_total: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
+    igst_total: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
+    cess_total: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
     vat_total: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
     round_off: Mapped[float] = mapped_column(Numeric(6, 2, asdecimal=False), nullable=False, default=0)
     grand_total: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
@@ -116,16 +125,26 @@ class SalesInvoiceItem(Base, UUIDPKMixin):
     discount_amount: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
     taxable_value: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False)
     tax_rate_percent: Mapped[float] = mapped_column(Numeric(5, 2, asdecimal=False), nullable=False, default=0)
+    cgst_amount: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
+    sgst_amount: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
+    igst_amount: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
+    cess_amount: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
     vat_amount: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
     line_total: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False)
 
     invoice: Mapped["SalesInvoice"] = relationship(back_populates="items")
+    product: Mapped["Product"] = relationship()
+
+    @property
+    def product_name(self) -> str | None:
+        return self.product.name if self.product else None
 
 
 class SalesReturn(Base, UUIDPKMixin, TimestampMixin):
     """A return or exchange against a posted invoice. Supports weight-based returns."""
 
     __tablename__ = "sales_returns"
+    __table_args__ = (UniqueConstraint("organization_id", "return_number", name="uq_sales_return_org_number"),)
 
     organization_id: Mapped[uuid.UUID] = org_fk()
     branch_id: Mapped[uuid.UUID] = branch_fk()
@@ -135,7 +154,7 @@ class SalesReturn(Base, UUIDPKMixin, TimestampMixin):
     exchange_invoice_id: Mapped[uuid.UUID | None] = mapped_column(
         GUID(), ForeignKey("sales_invoices.id"), nullable=True
     )
-    return_number: Mapped[str] = mapped_column(String(40), nullable=False, unique=True)
+    return_number: Mapped[str] = mapped_column(String(40), nullable=False)
     return_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     reason: Mapped[str | None] = mapped_column(String(255))
     refund_total: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
@@ -155,6 +174,9 @@ class SalesReturnItem(Base, UUIDPKMixin):
     )
     quantity: Mapped[float] = mapped_column(Numeric(14, 3, asdecimal=False), nullable=False)
     taxable_value: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False)
+    cgst_amount: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
+    sgst_amount: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
+    igst_amount: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
     vat_amount: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
     line_total: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False)
 

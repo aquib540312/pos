@@ -1,11 +1,14 @@
 import logging
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.core.config import get_settings
 from app.modules.accounting.api import router as accounting_router
 from app.modules.audit.api import router as audit_router
+from app.modules.cutting.api import router as cutting_router
+from app.modules.waste.api import router as waste_router
 from app.modules.auth.api import router as auth_router
 from app.modules.billing.api import router as billing_router
 from app.modules.catalog.api import router as catalog_router
@@ -37,6 +40,12 @@ settings = get_settings()
 
 app = FastAPI(title=settings.app_name, version="0.1.0")
 
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logging.exception("Unhandled exception: %s", exc)
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -66,6 +75,8 @@ for router in (
     sync_router,
     subscriptions_router,
     accounting_router,
+    waste_router,
+    cutting_router,
 ):
     app.include_router(router)
 

@@ -18,6 +18,7 @@ class Organization(Base, UUIDPKMixin, TimestampMixin):
     pan: Mapped[str | None] = mapped_column(String(10))
     default_state_code: Mapped[str] = mapped_column(String(2), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    tax_mode: Mapped[str] = mapped_column(String(10), nullable=False, default="saudi")  # india|saudi
 
     # Business branding used on receipts/invoices: logo file name under the
     # uploads dir (served via GET /org/logo.png), contact details and an

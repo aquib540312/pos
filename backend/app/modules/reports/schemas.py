@@ -158,3 +158,36 @@ class DashboardResponse(BaseModel):
     open_shifts: int
     open_credit_outstanding: float
     open_conflicts: int
+
+
+class SalesByBeefCutRow(BaseModel):
+    beef_cut: str
+    product_count: int
+    quantity_sold: float
+    revenue: float
+
+
+class SalesByCustomerTypeRow(BaseModel):
+    customer_type: str
+    invoice_count: int
+    total_revenue: float
+    total_vat: float
+
+
+class WasteReportRow(BaseModel):
+    product_id: uuid.UUID
+    product_name: str
+    reason: str
+    total_quantity: float
+    total_cost: float
+    entry_count: int
+
+
+class CustomerStatementRow(BaseModel):
+    invoice_id: uuid.UUID
+    invoice_number: str
+    invoice_date: str
+    grand_total: float
+    paid_amount: float
+    outstanding: float
+    payment_method: str

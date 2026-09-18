@@ -10,7 +10,7 @@ from app.models.mixins import GUID, TimestampMixin, UUIDPKMixin, org_fk
 
 class LoyaltyConfig(Base, UUIDPKMixin, TimestampMixin):
     """Per-organization loyalty points program settings. Defaults mirror the
-    legacy hard-coded constants (1 point per Rs.100 spend, 1 point = Re.1)
+    legacy hard-coded constants (1 point per SAR 100 spend, 1 point = SAR 1)
     for orgs that predate per-org configuration."""
 
     __tablename__ = "loyalty_configs"

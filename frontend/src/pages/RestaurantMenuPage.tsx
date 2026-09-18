@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { apiClient, apiErrorMessage } from '../api/client'
+import { useOrgStore } from '../store/org'
 import type {
   Category,
   DiningOrder,
@@ -58,7 +59,7 @@ const ITEM_STATUS_STYLES: Record<DiningOrderItem['status'], string> = {
   cancelled: 'bg-slate-300 text-slate-600 line-through',
 }
 
-function inr(value: number): string {
+function fmt(value: number): string {
   return `SAR ${value.toFixed(2)}`
 }
 
@@ -354,7 +355,7 @@ export default function RestaurantMenuPage() {
     }
     const paid = validPayments.reduce((s, p) => s + p.amount, 0)
     if (paid < estimate!.grand_total) {
-      notify('error', `Collected ${inr(paid)} is less than the bill ${inr(estimate!.grand_total)}`)
+      notify('error', `Collected ${fmt(paid)} is less than the bill ${fmt(estimate!.grand_total)}`)
       return
     }
     setSettling(true)
@@ -374,7 +375,7 @@ export default function RestaurantMenuPage() {
       await loadTables()
       notify(
         'success',
-        `Bill settled · Invoice ${data.invoice_number}${cashChange > 0 ? ` · change ${inr(cashChange)}` : ''}`,
+        `Bill settled · Invoice ${data.invoice_number}${cashChange > 0 ? ` · change ${fmt(cashChange)}` : ''}`,
       )
       if (sawTable) setShowTablePicker(false)
     } catch (err) {
@@ -772,7 +773,7 @@ const tableMap = useMemo(() => {
                       </p>
                       {currentOrder && (
                         <p className="mt-1 text-sm font-semibold text-white">
-                          {inr(currentOrder.subtotal - currentOrder.discount_total)}
+                          {fmt(currentOrder.subtotal - currentOrder.discount_total)}
                         </p>
                       )}
                     </button>
@@ -870,12 +871,12 @@ function MenuCard({
           <p className="line-clamp-2 text-sm font-semibold text-white">{product.name}</p>
           {product.sku && <p className="mt-0.5 text-[10px] text-slate-500">{product.sku}</p>}
           <div className="mt-auto flex items-end justify-between pt-3">
-            <span className="text-lg font-bold text-emerald-400">{inr(product.sale_price)}</span>
+            <span className="text-lg font-bold text-emerald-400">{fmt(product.sale_price)}</span>
             {!product.is_active && (
               <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] text-slate-300">Off</span>
             )}
           </div>
-          {product.tax_rate_percent ? <p className="text-[10px] text-slate-500">{product.tax_rate_percent}% GST</p> : null}
+          {product.tax_rate_percent ? <p className="text-[10px] text-slate-500">{product.tax_rate_percent}% VAT</p> : null}
         </div>
       </button>
       <button
@@ -1031,7 +1032,7 @@ function OrderCart({
                         </button>
                       </>
                     )}
-                    <span className="ml-auto text-sm font-semibold text-white">{inr(item.line_total)}</span>
+                    <span className="ml-auto text-sm font-semibold text-white">{fmt(item.line_total)}</span>
                     <button
                       disabled={busy !== null}
                       onClick={() => onRemoveItem(item)}
@@ -1053,29 +1054,29 @@ function OrderCart({
           <div className="mb-3 space-y-1 text-sm text-slate-300">
             <div className="flex justify-between">
               <span>Subtotal</span>
-              <span>{inr(estimate.subtotal)}</span>
+              <span>{fmt(estimate.subtotal)}</span>
             </div>
             {estimate.discount_total > 0 && (
               <div className="flex justify-between">
                 <span>Discount</span>
-                <span className="text-emerald-400">− {inr(estimate.discount_total)}</span>
+                <span className="text-emerald-400">− {fmt(estimate.discount_total)}</span>
               </div>
             )}
             {taxTotal > 0 && (
               <div className="flex justify-between">
-                <span>GST (CGST+SGST)</span>
-                <span>{inr(taxTotal)}</span>
+                <span>VAT</span>
+                <span>{fmt(taxTotal)}</span>
               </div>
             )}
             {estimate.round_off !== 0 && (
               <div className="flex justify-between">
                 <span>Round off</span>
-                <span>{estimate.round_off > 0 ? `+ ${inr(estimate.round_off)}` : `− ${inr(Math.abs(estimate.round_off))}`}</span>
+                <span>{estimate.round_off > 0 ? `+ ${fmt(estimate.round_off)}` : `− ${fmt(Math.abs(estimate.round_off))}`}</span>
               </div>
             )}
             <div className="flex justify-between border-t border-white/10 pt-2 text-base font-bold text-white">
               <span>Total</span>
-              <span>{inr(estimate.grand_total)}</span>
+              <span>{fmt(estimate.grand_total)}</span>
             </div>
           </div>
         )}
@@ -1105,7 +1106,7 @@ function OrderCart({
               disabled={!canSettle || busy !== null}
               className="w-full rounded-xl bg-emerald-500 px-4 py-3.5 text-base font-bold text-white shadow-lg shadow-emerald-500/20 hover:bg-emerald-400 disabled:opacity-40"
             >
-              {estimate ? `SETTLE · ${inr(estimate.grand_total)}` : 'SETTLE PAYMENT'}
+              {estimate ? `SETTLE · ${fmt(estimate.grand_total)}` : 'SETTLE PAYMENT'}
             </button>
           </div>
         ) : (
@@ -1155,8 +1156,8 @@ function SettleModal({
             </p>
           </div>
           <div className="text-right">
-            <p className="text-base font-bold text-emerald-400">{inr(estimate.grand_total)}</p>
-            <p className="text-xs text-slate-400">Total (incl. GST)</p>
+            <p className="text-base font-bold text-emerald-400">{fmt(estimate.grand_total)}</p>
+            <p className="text-xs text-slate-400">Total (incl. VAT)</p>
           </div>
         </div>
 
@@ -1231,7 +1232,7 @@ function SettleModal({
                       <span className="mb-0.5 block text-[11px] text-slate-400">Change</span>
                       <input
                         type="text"
-                        value={inr(lineChange)}
+                        value={fmt(lineChange)}
                         disabled
                         className="w-full rounded-lg border border-white/10 bg-slate-800 px-2 py-1.5 text-sm font-medium text-white"
                       />
@@ -1255,18 +1256,18 @@ function SettleModal({
         <div className="mb-4 space-y-1 border-t border-white/10 pt-3 text-sm">
           <div className="flex justify-between">
             <span>Collected</span>
-            <span>{inr(totalPaid)}</span>
+            <span>{fmt(totalPaid)}</span>
           </div>
           {balanceLeft > 0 && (
             <div className="flex justify-between font-medium text-amber-400">
               <span>Still due</span>
-              <span>{inr(balanceLeft)}</span>
+              <span>{fmt(balanceLeft)}</span>
             </div>
           )}
           {cashChange > 0 && (
             <div className="flex justify-between font-medium text-emerald-400">
               <span>Cash change</span>
-              <span>{inr(cashChange)}</span>
+              <span>{fmt(cashChange)}</span>
             </div>
           )}
         </div>

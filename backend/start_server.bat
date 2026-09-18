@@ -1,0 +1,1 @@
+"D:\pos\backend\.venv\Scripts\python.exe" "D:\pos\backend\start_server.py"

@@ -18,6 +18,16 @@ interface Branch {
 
 const PAYMENT_METHODS: PaymentLine['method'][] = ['cash', 'card', 'bank_transfer', 'credit']
 
+function getProductPrice(product: Product, customerPriceLevel: string | null): number {
+  if (!customerPriceLevel || customerPriceLevel === 'retail') return product.sale_price
+  switch (customerPriceLevel) {
+    case 'wholesale': return product.wholesale_price || product.sale_price
+    case 'restaurant': return product.restaurant_price || product.sale_price
+    case 'vip': return product.vip_price || product.sale_price
+    default: return product.sale_price
+  }
+}
+
 // Mirrors the backend's Decimal ROUND_HALF_UP (see vat/service.py) closely
 // enough for typical retail amounts, so the default payment amount we
 // suggest matches what the server will actually compute. The server
@@ -81,6 +91,15 @@ export default function POSPage() {
 
   const warehouse = branch?.warehouses.find((w) => w.is_default) ?? branch?.warehouses[0]
 
+  useEffect(() => {
+    setCart((prev) =>
+      prev.map((l) => ({
+        ...l,
+        unitPrice: getProductPrice(l.product, customer?.price_level ?? null),
+      })),
+    )
+  }, [customer])
+
   // Client-side preview -- the server recomputes and is authoritative
   // (stock could be gone, or a rate could change, between preview and
   // submit), but using each product's real tax_rate_percent keeps this
@@ -89,7 +108,7 @@ export default function POSPage() {
     let taxable = 0
     let tax = 0
     for (const line of cart) {
-      const gross = line.quantity * line.product.sale_price
+      const gross = line.quantity * line.unitPrice
       const lineTaxable = roundHalfUp(Math.max(0, gross - line.discountAmount), 2)
       const lineTax = roundHalfUp((lineTaxable * (line.product.tax_rate_percent ?? 0)) / 100, 2)
       taxable += lineTaxable
@@ -163,7 +182,7 @@ export default function POSPage() {
       if (existing) {
         return prev.map((l) => (l.product.id === product.id ? { ...l, quantity: l.quantity + 1 } : l))
       }
-      return [...prev, { product, quantity: 1, discountAmount: 0 }]
+      return [...prev, { product, quantity: 1, discountAmount: 0, unitPrice: getProductPrice(product, customer?.price_level ?? null) }]
     })
     setSearchResults([])
     setBarcodeInput('')
@@ -225,6 +244,7 @@ export default function POSPage() {
         items: cart.map((l) => ({
           product_id: l.product.id,
           quantity: l.quantity,
+          unit_price: l.unitPrice,
           discount_amount: l.discountAmount,
         })),
         payments: isCreditSale || gatewayTransactionId ? [] : payments.filter((p) => p.amount > 0),
@@ -307,7 +327,7 @@ export default function POSPage() {
                       {p.variant_label && <span className="ml-1 rounded bg-slate-200 px-1.5 py-0.5 text-xs dark:bg-slate-700">{p.variant_label}</span>}
                       {p.is_weighted && <span className="ml-1 text-xs text-indigo-500">weight</span>}
                     </span>
-                    <span className="font-medium">SAR {p.sale_price.toFixed(2)}</span>
+                    <span className="font-medium">SAR {getProductPrice(p, customer?.price_level ?? null).toFixed(2)}</span>
                   </button>
                 </li>
               ))}
@@ -329,7 +349,7 @@ export default function POSPage() {
             </thead>
             <tbody>
               {cart.map((line) => {
-                const lineTotal = Math.max(0, line.quantity * line.product.sale_price - line.discountAmount)
+                const lineTotal = Math.max(0, line.quantity * line.unitPrice - line.discountAmount)
                 return (
                   <tr key={line.product.id} className="border-b border-slate-100 last:border-0 dark:border-slate-700">
                     <td className="px-3 py-2 font-medium text-slate-900 dark:text-slate-100">{line.product.name}</td>
@@ -343,7 +363,7 @@ export default function POSPage() {
                         className="w-20 rounded border border-slate-300 px-2 py-1 dark:border-slate-600 dark:bg-slate-700"
                       />
                     </td>
-                    <td className="px-3 py-2 text-slate-600 dark:text-slate-300">SAR {line.product.sale_price.toFixed(2)}</td>
+                    <td className="px-3 py-2 text-slate-600 dark:text-slate-300">SAR {line.unitPrice.toFixed(2)}</td>
                     <td className="px-3 py-2">
                       <input
                         type="number"

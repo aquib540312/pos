@@ -43,6 +43,7 @@ class SaleCreateRequest(BaseModel):
 class SaleInvoiceItemResponse(BaseModel):
     id: uuid.UUID
     product_id: uuid.UUID
+    product_name: str | None = None
     batch_id: uuid.UUID | None
     quantity: float
     unit_price: float

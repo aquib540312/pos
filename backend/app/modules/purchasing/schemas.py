@@ -65,8 +65,9 @@ class GoodsReceiptItemRequest(BaseModel):
     def _free_quantity_within_total(self) -> "GoodsReceiptItemRequest":
         if self.free_quantity > self.quantity:
             raise ValueError("free_quantity cannot exceed quantity")
-        if self.discount_amount > self.quantity * self.unit_cost:
-            raise ValueError("discount_amount cannot exceed gross line value")
+        paid_qty = self.quantity - self.free_quantity
+        if self.discount_amount > paid_qty * self.unit_cost:
+            raise ValueError("discount_amount cannot exceed gross paid line value")
         return self
 
 
@@ -97,6 +98,8 @@ class GoodsReceiptResponse(BaseModel):
     id: uuid.UUID
     grn_number: str
     supplier_id: uuid.UUID
+    warehouse_id: uuid.UUID
+    purchase_order_id: uuid.UUID | None = None
     received_at: datetime
     supplier_invoice_number: str | None
     items: list[GoodsReceiptItemResponse]
@@ -127,12 +130,6 @@ class PurchaseReturnItemRequest(BaseModel):
     unit_cost: float = Field(ge=0)
     batch_id: uuid.UUID | None = None
     original_grn_item_id: uuid.UUID | None = None
-
-    @model_validator(mode="after")
-    def _require_batch_or_linked(self) -> "PurchaseReturnItemRequest":
-        if self.batch_id is None and self.original_grn_item_id is None:
-            raise ValueError("Provide batch_id or original_grn_item_id for each returned line")
-        return self
 
 
 class PurchaseReturnCreateRequest(BaseModel):

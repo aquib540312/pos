@@ -7,6 +7,8 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.models.sales import Quotation, QuotationItem, SalesInvoice, SalesInvoiceItem, SalesReturn
 
+from app.models.catalog import Product
+
 
 class SalesInvoiceRepository:
     def __init__(self, db: Session):
@@ -26,7 +28,10 @@ class SalesInvoiceRepository:
         stmt = (
             select(SalesInvoice)
             .where(SalesInvoice.id == invoice_id)
-            .options(selectinload(SalesInvoice.items), selectinload(SalesInvoice.payments))
+            .options(
+                selectinload(SalesInvoice.items).selectinload(SalesInvoiceItem.product),
+                selectinload(SalesInvoice.payments),
+            )
         )
         return self.db.execute(stmt).scalars().first()
 
@@ -37,7 +42,10 @@ class SalesInvoiceRepository:
         stmt = (
             select(SalesInvoice)
             .where(SalesInvoice.organization_id == organization_id)
-            .options(selectinload(SalesInvoice.items), selectinload(SalesInvoice.payments))
+            .options(
+                selectinload(SalesInvoice.items).selectinload(SalesInvoiceItem.product),
+                selectinload(SalesInvoice.payments),
+            )
         )
         if branch_id:
             stmt = stmt.where(SalesInvoice.branch_id == branch_id)

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { apiClient, apiErrorMessage } from '../api/client'
 import { useCan, PERMS } from '../auth/permissions'
+import { useOrgStore } from '../store/org'
 import type { BulkImportResponse, Category, HSN, Product, UOM } from '../types'
 
 interface Warehouse {
@@ -16,7 +17,7 @@ interface Branch {
   warehouses: Warehouse[]
 }
 
-const GST_SLABS = [0, 5, 12, 18, 28]
+const VAT_SLABS = [0, 5, 15]
 
 interface ProductForm {
   sku: string
@@ -42,6 +43,18 @@ interface ProductForm {
   parent_product_id: string
   variant_label: string
   aliases: string
+  name_arabic: string
+  supplier_id: string
+  restaurant_price: string
+  vip_price: string
+  cost_per_kg: string
+  selling_price_per_kg: string
+  minimum_selling_quantity: string
+  beef_cut: string
+  fresh_frozen: string
+  local_imported: string
+  country_of_origin: string
+  storage_location: string
   initial_stock_qty: string
   warehouse_id: string
 }
@@ -70,11 +83,24 @@ const EMPTY_FORM: ProductForm = {
   parent_product_id: '',
   variant_label: '',
   aliases: '',
+  name_arabic: '',
+  supplier_id: '',
+  restaurant_price: '',
+  vip_price: '',
+  cost_per_kg: '',
+  selling_price_per_kg: '',
+  minimum_selling_quantity: '',
+  beef_cut: '',
+  fresh_frozen: '',
+  local_imported: '',
+  country_of_origin: '',
+  storage_location: '',
   initial_stock_qty: '',
   warehouse_id: '',
 }
 
 export default function ProductsPage() {
+  const taxMode = useOrgStore((s) => s.profile?.tax_mode ?? 'saudi')
   const [products, setProducts] = useState<Product[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [uoms, setUoms] = useState<UOM[]>([])
@@ -91,6 +117,13 @@ export default function ProductsPage() {
   const [bulkImportError, setBulkImportError] = useState<string | null>(null)
   const [bulkImportResult, setBulkImportResult] = useState<BulkImportResponse | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [newCategoryName, setNewCategoryName] = useState('')
+  const [newUomCode, setNewUomCode] = useState('')
+  const [newUomName, setNewUomName] = useState('')
+  const [showAddCategory, setShowAddCategory] = useState(false)
+  const [showAddUom, setShowAddUom] = useState(false)
+  const [addingCategory, setAddingCategory] = useState(false)
+  const [addingUom, setAddingUom] = useState(false)
 
   const [form, setForm] = useState<ProductForm>(EMPTY_FORM)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -139,6 +172,18 @@ export default function ProductsPage() {
       parent_product_id: p.parent_product_id ?? '',
       variant_label: p.variant_label ?? '',
       aliases: p.aliases.join(', '),
+      name_arabic: p.name_arabic ?? '',
+      supplier_id: p.supplier_id ?? '',
+      restaurant_price: String(p.restaurant_price ?? 0),
+      vip_price: String(p.vip_price ?? 0),
+      cost_per_kg: String(p.cost_per_kg ?? 0),
+      selling_price_per_kg: String(p.selling_price_per_kg ?? 0),
+      minimum_selling_quantity: String(p.minimum_selling_quantity ?? 0),
+      beef_cut: p.beef_cut ?? '',
+      fresh_frozen: p.fresh_frozen ?? '',
+      local_imported: p.local_imported ?? '',
+      country_of_origin: p.country_of_origin ?? '',
+      storage_location: p.storage_location ?? '',
       initial_stock_qty: '',
       warehouse_id: '',
     })
@@ -151,6 +196,39 @@ export default function ProductsPage() {
     setForm(EMPTY_FORM)
     setShowForm(false)
     setError(null)
+  }
+
+  async function handleAddCategory() {
+    if (!newCategoryName.trim()) return
+    setAddingCategory(true)
+    try {
+      const res = await apiClient.post('/catalog/categories', { name: newCategoryName.trim() })
+      setCategories((prev) => [...prev, res.data])
+      setForm((f) => ({ ...f, category_id: res.data.id }))
+      setNewCategoryName('')
+      setShowAddCategory(false)
+    } catch (err) {
+      setError(apiErrorMessage(err))
+    } finally {
+      setAddingCategory(false)
+    }
+  }
+
+  async function handleAddUom() {
+    if (!newUomCode.trim() || !newUomName.trim()) return
+    setAddingUom(true)
+    try {
+      const res = await apiClient.post('/catalog/uom', { code: newUomCode.trim(), name: newUomName.trim() })
+      setUoms((prev) => [...prev, res.data])
+      setForm((f) => ({ ...f, uom_id: res.data.id }))
+      setNewUomCode('')
+      setNewUomName('')
+      setShowAddUom(false)
+    } catch (err) {
+      setError(apiErrorMessage(err))
+    } finally {
+      setAddingUom(false)
+    }
   }
 
   async function handleUpdate(p: Product) {
@@ -180,6 +258,18 @@ export default function ProductsPage() {
         parent_product_id: form.parent_product_id || null,
         variant_label: form.variant_label || null,
         aliases: aliases,
+        name_arabic: form.name_arabic || null,
+        supplier_id: form.supplier_id || null,
+        restaurant_price: Number(form.restaurant_price || 0),
+        vip_price: Number(form.vip_price || 0),
+        cost_per_kg: Number(form.cost_per_kg || 0),
+        selling_price_per_kg: Number(form.selling_price_per_kg || 0),
+        minimum_selling_quantity: Number(form.minimum_selling_quantity || 0),
+        beef_cut: form.beef_cut || null,
+        fresh_frozen: form.fresh_frozen || null,
+        local_imported: form.local_imported || null,
+        country_of_origin: form.country_of_origin || null,
+        storage_location: form.storage_location || null,
       })
       cancelForm()
       loadProducts(search)
@@ -224,6 +314,18 @@ export default function ProductsPage() {
         parent_product_id: form.parent_product_id || null,
         variant_label: form.variant_label || null,
         aliases: aliases,
+        name_arabic: form.name_arabic || null,
+        supplier_id: form.supplier_id || null,
+        restaurant_price: Number(form.restaurant_price || 0),
+        vip_price: Number(form.vip_price || 0),
+        cost_per_kg: Number(form.cost_per_kg || 0),
+        selling_price_per_kg: Number(form.selling_price_per_kg || 0),
+        minimum_selling_quantity: Number(form.minimum_selling_quantity || 0),
+        beef_cut: form.beef_cut || null,
+        fresh_frozen: form.fresh_frozen || null,
+        local_imported: form.local_imported || null,
+        country_of_origin: form.country_of_origin || null,
+        storage_location: form.storage_location || null,
         initial_stock_qty: Number(form.initial_stock_qty || 0),
         warehouse_id: form.warehouse_id || null,
       })
@@ -235,13 +337,28 @@ export default function ProductsPage() {
     }
   }
 
-  function pickGstSlab(rate: number) {
+  async function pickGstSlab(rate: number) {
     const match = hsnCodes.find((h) => Math.round(h.current_rate_percent ?? -1) === rate)
     if (match) {
       setForm((f) => ({ ...f, hsn_code_id: match.id }))
       setError(null)
     } else {
-      setError(`No HSN code at ${rate}% exists yet -- create one under HSN/SAC Codes first.`)
+      try {
+        const today = new Date().toISOString().split('T')[0]
+        const res = await apiClient.post('/catalog/hsn', {
+          code: `VAT${rate}`,
+          description: `Saudi VAT ${rate}%`,
+          is_service: false,
+          rate_percent: rate,
+          cess_percent: 0,
+          effective_from: today,
+        })
+        setHsnCodes((prev) => [...prev, res.data])
+        setForm((f) => ({ ...f, hsn_code_id: res.data.id }))
+        setError(null)
+      } catch (err) {
+        setError(apiErrorMessage(err))
+      }
     }
   }
 
@@ -429,29 +546,57 @@ export default function ProductsPage() {
           </div>
           <input required placeholder="Name *" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="col-span-2 rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100" />
           <input placeholder="Brand / Manufacturer" value={form.brand} onChange={(e) => setForm({ ...form, brand: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100" />
+          <input placeholder="Arabic name" value={form.name_arabic} onChange={(e) => setForm({ ...form, name_arabic: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100" />
           <input placeholder="Search aliases (comma)" value={form.aliases} onChange={(e) => setForm({ ...form, aliases: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100" />
-          <select value={form.category_id} onChange={(e) => setForm({ ...form, category_id: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100">
-            <option value="">Category...</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
-          <select required value={form.uom_id} onChange={(e) => setForm({ ...form, uom_id: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100">
-            <option value="">Unit *</option>
-            {uoms.map((u) => (
-              <option key={u.id} value={u.id}>{u.code} - {u.name}</option>
-            ))}
-          </select>
+          <div>
+            <div className="flex gap-1">
+              <select value={form.category_id} onChange={(e) => setForm({ ...form, category_id: e.target.value })} className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100">
+                <option value="">Category...</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+              <button type="button" onClick={() => setShowAddCategory(!showAddCategory)} className="rounded-lg border border-slate-300 px-2 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700" title="Add new category">+</button>
+            </div>
+            {showAddCategory && (
+              <div className="mt-1 flex gap-1">
+                <input value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} placeholder="Category name" className="flex-1 rounded-lg border border-slate-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100" />
+                <button type="button" onClick={handleAddCategory} disabled={addingCategory} className="rounded-lg bg-indigo-600 px-2 py-1 text-xs text-white hover:bg-indigo-500 disabled:opacity-50">{addingCategory ? '...' : 'Save'}</button>
+                <button type="button" onClick={() => { setShowAddCategory(false); setNewCategoryName('') }} className="rounded-lg border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300">X</button>
+              </div>
+            )}
+          </div>
+          <div>
+            <div className="flex gap-1">
+              <select required value={form.uom_id} onChange={(e) => setForm({ ...form, uom_id: e.target.value })} className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100">
+                <option value="">Unit *</option>
+                {uoms.map((u) => (
+                  <option key={u.id} value={u.id}>{u.code} - {u.name}</option>
+                ))}
+              </select>
+              <button type="button" onClick={() => setShowAddUom(!showAddUom)} className="rounded-lg border border-slate-300 px-2 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700" title="Add new unit">+</button>
+            </div>
+            {showAddUom && (
+              <div className="mt-1 grid grid-cols-2 gap-1">
+                <input value={newUomCode} onChange={(e) => setNewUomCode(e.target.value)} placeholder="Code (KG, PCS)" className="rounded-lg border border-slate-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100" />
+                <input value={newUomName} onChange={(e) => setNewUomName(e.target.value)} placeholder="Name (Kilogram)" className="rounded-lg border border-slate-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100" />
+                <div className="col-span-2 flex gap-1">
+                  <button type="button" onClick={handleAddUom} disabled={addingUom} className="flex-1 rounded-lg bg-indigo-600 px-2 py-1 text-xs text-white hover:bg-indigo-500 disabled:opacity-50">{addingUom ? '...' : 'Save'}</button>
+                  <button type="button" onClick={() => { setShowAddUom(false); setNewUomCode(''); setNewUomName('') }} className="rounded-lg border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300">X</button>
+                </div>
+              </div>
+            )}
+          </div>
           <div className="col-span-2">
             <select value={form.hsn_code_id} onChange={(e) => setForm({ ...form, hsn_code_id: e.target.value })} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100">
-              <option value="">HSN / GST rate...</option>
+              <option value="">{taxMode === 'saudi' ? 'Tax rate...' : 'HSN / GST rate...'}</option>
               {hsnCodes.map((h) => (
-                <option key={h.id} value={h.id}>{h.code} ({h.current_rate_percent ?? '?'}%)</option>
+                <option key={h.id} value={h.id}>{h.current_rate_percent != null ? `${h.current_rate_percent}%` : h.code}</option>
               ))}
             </select>
             <div className="mt-1 flex flex-wrap gap-1">
-              <span className="text-xs text-slate-400 dark:text-slate-500">Quick GST:</span>
-              {GST_SLABS.map((rate) => (
+              <span className="text-xs text-slate-400 dark:text-slate-500">Quick Tax:</span>
+              {VAT_SLABS.map((rate) => (
                 <button key={rate} type="button" onClick={() => pickGstSlab(rate)} className="rounded border border-slate-300 px-2 py-0.5 text-xs text-slate-600 hover:bg-indigo-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700">
                   {rate}%
                 </button>
@@ -461,8 +606,12 @@ export default function ProductsPage() {
           <input required type="number" step="0.01" placeholder="MRP *" value={form.mrp} onChange={(e) => setForm({ ...form, mrp: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100" />
           <input required type="number" step="0.01" placeholder="Sale price *" value={form.sale_price} onChange={(e) => setForm({ ...form, sale_price: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100" />
           <input type="number" step="0.01" placeholder="Wholesale price" value={form.wholesale_price} onChange={(e) => setForm({ ...form, wholesale_price: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100" />
+          <input type="number" step="0.01" placeholder="Restaurant price" value={form.restaurant_price} onChange={(e) => setForm({ ...form, restaurant_price: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100" />
+          <input type="number" step="0.01" placeholder="VIP price" value={form.vip_price} onChange={(e) => setForm({ ...form, vip_price: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100" />
           <input type="number" step="0.01" placeholder="Purchase price" value={form.purchase_price} onChange={(e) => setForm({ ...form, purchase_price: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100" />
           <input type="number" step="0.01" placeholder="Reorder level" value={form.reorder_level} onChange={(e) => setForm({ ...form, reorder_level: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100" />
+          <input type="number" step="0.01" placeholder="Cost per KG" value={form.cost_per_kg} onChange={(e) => setForm({ ...form, cost_per_kg: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100" />
+          <input type="number" step="0.01" placeholder="Selling price per KG" value={form.selling_price_per_kg} onChange={(e) => setForm({ ...form, selling_price_per_kg: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100" />
           <input type="number" step="0.001" min="0" placeholder="Opening stock qty" value={form.initial_stock_qty} onChange={(e) => setForm({ ...form, initial_stock_qty: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100" />
           <select value={form.warehouse_id} onChange={(e) => setForm({ ...form, warehouse_id: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100">
             <option value="">Warehouse for opening stock...</option>
@@ -492,7 +641,7 @@ export default function ProductsPage() {
               <input type="checkbox" checked={form.is_weighted} onChange={(e) => setForm({ ...form, is_weighted: e.target.checked })} /> Sold by weight
             </label>
             <label className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
-              <input type="checkbox" checked={form.prices_gst_inclusive} onChange={(e) => setForm({ ...form, prices_gst_inclusive: e.target.checked })} /> Price includes GST
+              <input type="checkbox" checked={form.prices_gst_inclusive} onChange={(e) => setForm({ ...form, prices_gst_inclusive: e.target.checked })} /> {taxMode === 'saudi' ? 'Price includes VAT' : 'Price includes GST'}
             </label>
             <label className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
               <input type="checkbox" checked={form.loyalty_exempt} onChange={(e) => setForm({ ...form, loyalty_exempt: e.target.checked })} /> No loyalty points
@@ -500,6 +649,46 @@ export default function ProductsPage() {
             <label className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
               <input type="checkbox" checked={form.low_stock_notify} onChange={(e) => setForm({ ...form, low_stock_notify: e.target.checked })} /> Low-stock alert
             </label>
+          </div>
+
+          <div className="col-span-2 rounded-lg border border-slate-200 p-3 dark:border-slate-700">
+            <h3 className="mb-2 text-xs font-semibold text-slate-500 dark:text-slate-400">Beef-Specific</h3>
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+              <select value={form.beef_cut} onChange={(e) => setForm({ ...form, beef_cut: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100">
+                <option value="">Beef cut...</option>
+                <option value="Tenderloin">Tenderloin</option>
+                <option value="Ribeye">Ribeye</option>
+                <option value="Striploin">Striploin</option>
+                <option value="Sirloin">Sirloin</option>
+                <option value="Topside">Topside</option>
+                <option value="Silverside">Silverside</option>
+                <option value="Chuck">Chuck</option>
+                <option value="Brisket">Brisket</option>
+                <option value="Ribs">Ribs</option>
+                <option value="Short Ribs">Short Ribs</option>
+                <option value="Shank">Shank</option>
+                <option value="Minced">Minced</option>
+                <option value="Cubes">Cubes</option>
+                <option value="Liver">Liver</option>
+                <option value="Heart">Heart</option>
+                <option value="Fat">Fat</option>
+                <option value="Bones">Bones</option>
+                <option value="Other">Other</option>
+              </select>
+              <select value={form.fresh_frozen} onChange={(e) => setForm({ ...form, fresh_frozen: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100">
+                <option value="">Fresh/Frozen...</option>
+                <option value="fresh">Fresh</option>
+                <option value="frozen">Frozen</option>
+              </select>
+              <select value={form.local_imported} onChange={(e) => setForm({ ...form, local_imported: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100">
+                <option value="">Local/Imported...</option>
+                <option value="local">Local</option>
+                <option value="imported">Imported</option>
+              </select>
+              <input placeholder="Country of origin" value={form.country_of_origin} onChange={(e) => setForm({ ...form, country_of_origin: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100" />
+              <input type="number" step="0.001" min="0" placeholder="Min selling qty (KG)" value={form.minimum_selling_quantity} onChange={(e) => setForm({ ...form, minimum_selling_quantity: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100" />
+              <input placeholder="Storage location" value={form.storage_location} onChange={(e) => setForm({ ...form, storage_location: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100" />
+            </div>
           </div>
 
           {error && <p className="col-span-full text-sm text-red-600 dark:text-red-400">{error}</p>}
@@ -528,6 +717,7 @@ export default function ProductsPage() {
               <th className="px-4 py-3">Photo</th>
               <th className="px-4 py-3">SKU</th>
               <th className="px-4 py-3">Name</th>
+              <th className="px-4 py-3">Beef Cut</th>
               <th className="px-4 py-3">Brand</th>
               <th className="px-4 py-3">Category</th>
               <th className="px-4 py-3">MRP</th>
@@ -547,6 +737,7 @@ export default function ProductsPage() {
                 </td>
                 <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{p.sku}{p.variant_label ? ` · ${p.variant_label}` : ''}</td>
                 <td className="px-4 py-3 font-medium text-slate-900 dark:text-slate-100">{p.name}</td>
+                <td className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">{p.beef_cut ?? '—'}</td>
                 <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{p.brand ?? '—'}</td>
                 <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{p.category_name ?? '—'}</td>
                 <td className="px-4 py-3 text-slate-600 dark:text-slate-300">SAR {p.mrp.toFixed(2)}</td>
@@ -591,7 +782,7 @@ export default function ProductsPage() {
             ))}
             {products.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-6 text-center text-slate-400">No products found.</td>
+                <td colSpan={9} className="px-4 py-6 text-center text-slate-400">No products found.</td>
               </tr>
             )}
           </tbody>

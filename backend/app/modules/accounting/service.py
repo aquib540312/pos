@@ -26,6 +26,8 @@ _PAYMENT_METHOD_ACCOUNT = {
     "bank_transfer": "1010",
     "credit": "1100",
     "split": "1010",
+    "upi": "1010",
+    "gift_card": "2000",
 }
 
 # Refund mode -> control account credited when money/credit actually leaves
@@ -67,10 +69,14 @@ class AccountingService:
         for code, amount in debits.items():
             if amount:
                 account = self.ledger.get_by_code(organization_id, code)
+                if account is None:
+                    raise ValidationError(f"Ledger account {code} not found for organization")
                 self.ledger.add_line(JournalLine(entry_id=entry.id, account_id=account.id, debit=round(amount, 2), credit=0))
         for code, amount in credits.items():
             if amount:
                 account = self.ledger.get_by_code(organization_id, code)
+                if account is None:
+                    raise ValidationError(f"Ledger account {code} not found for organization")
                 self.ledger.add_line(JournalLine(entry_id=entry.id, account_id=account.id, debit=0, credit=round(amount, 2)))
         return entry
 
@@ -122,10 +128,11 @@ class AccountingService:
         receive_goods), the VAT component is ALSO debited to the appropriate
         Input VAT Receivable account -- this is what makes purchase-
         side input credit claimable."""
-        if total_cost <= 0:
-            raise ValueError("total_cost must be positive")
+        if total_cost <= 0 and input_vat <= 0:
+            return None
         debits: dict[str, float] = defaultdict(float)
-        debits["1200"] += total_cost
+        if total_cost > 0:
+            debits["1200"] += total_cost
         if input_vat:
             debits["2200"] += round(input_vat, 2)
         credits = {"2000": round(total_cost + float(input_vat), 2)}

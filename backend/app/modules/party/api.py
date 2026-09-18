@@ -1,6 +1,7 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.deps import require_permission
@@ -10,7 +11,8 @@ from app.db.session import get_db
 from app.models.rbac import User
 from app.modules.audit.service import write_audit_log
 from app.modules.party.schemas import (
-    CreditPaymentRequest,
+    CustomerPaymentRequest,
+    CustomerPaymentResponse,
     CustomerCreateRequest,
     CustomerResponse,
     CustomerUpdateRequest,
@@ -40,8 +42,12 @@ def create_customer(
     db: Session = Depends(get_db),
     user: User = Depends(require_permission(Perm.PARTY_MANAGE)),
 ):
-    customer = PartyService(db).create_customer(user.organization_id, **payload.model_dump())
-    db.commit()
+    try:
+        customer = PartyService(db).create_customer(user.organization_id, **payload.model_dump())
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status.HTTP_409_CONFLICT, f"A customer with this phone number already exists")
     return customer
 
 
@@ -92,7 +98,7 @@ def deactivate_customer(
 @router.post("/customers/{customer_id}/collect", response_model=CustomerResponse)
 def collect_credit_payment(
     customer_id: uuid.UUID,
-    payload: CreditPaymentRequest,
+    payload: CustomerPaymentRequest,
     db: Session = Depends(get_db),
     user: User = Depends(require_permission(Perm.PARTY_MANAGE)),
 ):
@@ -109,7 +115,19 @@ def collect_credit_payment(
     except NotFoundError as exc:
         db.rollback()
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
+    except CreditLimitExceededError as exc:
+        db.rollback()
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
     return customer
+
+
+@router.get("/customers/{customer_id}/payments", response_model=list[CustomerPaymentResponse])
+def list_customer_payments(
+    customer_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(require_permission(Perm.PARTY_MANAGE))
+):
+    service = PartyService(db)
+    customer = service.get_customer_or_404(customer_id)
+    return service.customer_payments.list(user.organization_id, customer_id)
 
 
 @router.get("/suppliers", response_model=list[SupplierResponse])
@@ -123,8 +141,12 @@ def create_supplier(
     db: Session = Depends(get_db),
     user: User = Depends(require_permission(Perm.PARTY_MANAGE)),
 ):
-    supplier = PartyService(db).create_supplier(user.organization_id, **payload.model_dump())
-    db.commit()
+    try:
+        supplier = PartyService(db).create_supplier(user.organization_id, **payload.model_dump())
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status.HTTP_409_CONFLICT, f"A supplier named '{payload.name}' already exists")
     return supplier
 
 

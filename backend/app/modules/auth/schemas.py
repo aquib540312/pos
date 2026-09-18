@@ -46,6 +46,7 @@ class SignupRequest(BaseModel):
     legal_name: str = Field(min_length=1, max_length=255)
     trade_name: str = Field(min_length=1, max_length=255)
     gstin: str | None = None
+    vat_number: str | None = None
     default_state_code: str = Field(min_length=2, max_length=2)
     branch_name: str = Field(min_length=1, max_length=255)
     branch_code: str = Field(default="MAIN", min_length=1, max_length=20)

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { apiClient } from '../api/client'
 import { useAuthStore } from '../store/auth'
+import { useOrgStore } from '../store/org'
 import { visibleNavItems } from '../auth/nav'
 import type { AppNotification, OrgProfile, Subscription } from '../types'
 
@@ -18,7 +19,8 @@ export default function Layout() {
   const [subscription, setSubscription] = useState<Subscription | null>(null)
   const [notifications, setNotifications] = useState<AppNotification[]>([])
   const [showBell, setShowBell] = useState(false)
-  const [profile, setProfile] = useState<OrgProfile | null>(null)
+  const profile = useOrgStore((s) => s.profile)
+  const setProfile = useOrgStore((s) => s.setProfile)
   // user is populated by ProtectedRoute before this renders, so no flash of
   // unauthorized entries.
   const navItems = visibleNavItems(user)
@@ -34,7 +36,7 @@ export default function Layout() {
     apiClient
       .get<OrgProfile>('/org/profile')
       .then((res) => setProfile(res.data))
-      .catch(() => setProfile(null))
+      .catch(() => {})
     loadNotifications()
   }, [])
 
@@ -60,7 +62,7 @@ export default function Layout() {
 
   return (
     <div className="flex min-h-screen bg-slate-50 dark:bg-slate-900">
-      <aside className="flex w-56 shrink-0 flex-col border-r border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
+      <aside className="flex w-56 shrink-0 flex-col border-r border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950 print:hidden">
         <div className="border-b border-slate-200 px-4 py-4 dark:border-slate-800">
           <div className="flex items-center gap-2">
             {profile?.has_logo && <img src="/org/logo.png" alt="Store logo" className="h-8 w-8 rounded object-contain" />}
@@ -101,7 +103,7 @@ export default function Layout() {
         </div>
       </aside>
       <div className="flex flex-1 flex-col overflow-hidden">
-        <header className="flex items-center justify-end gap-3 border-b border-slate-200 bg-white px-6 py-2 dark:border-slate-800 dark:bg-slate-950">
+        <header className="flex items-center justify-end gap-3 border-b border-slate-200 bg-white px-6 py-2 dark:border-slate-800 dark:bg-slate-950 print:hidden">
           <div className="relative">
             <button
               onClick={() => setShowBell((v) => !v)}
@@ -143,7 +145,7 @@ export default function Layout() {
                     >
                       <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{n.title}</p>
                       {n.body && <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{n.body}</p>}
-                      <p className="mt-1 text-[11px] text-slate-400">{new Date(n.created_at).toLocaleString('en-IN')}</p>
+                      <p className="mt-1 text-[11px] text-slate-400">{new Date(n.created_at).toLocaleString('en-SA')}</p>
                     </button>
                   ))}
                 </div>
@@ -151,14 +153,12 @@ export default function Layout() {
             )}
           </div>
         </header>
-        {(showTrialBanner || showPastDueBanner) && (
-          <div
-            className={`px-6 py-2 text-center text-sm font-medium ${
-              showPastDueBanner
-                ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
-                : 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300'
-            }`}
-          >
+{(showTrialBanner || showPastDueBanner) && (
+          <div className={`print:hidden px-6 py-2 text-center text-sm font-medium ${
+               showPastDueBanner
+                 ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                 : 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300'
+             }`}>
             {showPastDueBanner
               ? 'Your subscription needs attention -- billing has lapsed.'
               : `Your free trial ends in ${trialDays} day(s).`}{' '}

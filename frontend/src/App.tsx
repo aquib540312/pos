@@ -29,6 +29,8 @@ import SalesHistoryPage from './pages/SalesHistoryPage'
 import StockPage from './pages/StockPage'
 import OffersPage from './pages/OffersPage'
 import SettingsPage from './pages/SettingsPage'
+import WastePage from './pages/WastePage'
+import CuttingPage from './pages/CuttingPage'
 import { PERMS } from './auth/permissions'
 
 export default function App() {
@@ -198,6 +200,22 @@ export default function App() {
               element={
                 <RequirePermission permission={PERMS.INVENTORY_VIEW}>
                   <StockPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="/waste"
+              element={
+                <RequirePermission permission={PERMS.INVENTORY_ADJUST}>
+                  <WastePage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="/cutting"
+              element={
+                <RequirePermission permission={PERMS.INVENTORY_ADJUST}>
+                  <CuttingPage />
                 </RequirePermission>
               }
             />

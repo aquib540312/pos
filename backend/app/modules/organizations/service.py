@@ -31,6 +31,8 @@ class OrganizationService:
         for field in ("gstin", "pan", "phone", "address", "footer_note"):
             if field in updates:
                 setattr(org, field, updates[field] or None)
+        if "tax_mode" in updates:
+            org.tax_mode = updates["tax_mode"] or "vat"
         self.db.flush()
         return org
 

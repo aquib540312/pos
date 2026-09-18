@@ -43,13 +43,22 @@ class CustomerUpdateRequest(BaseModel):
     remove_address: bool = False
 
 
-class CreditPaymentRequest(BaseModel):
-    """A cash/card/bank payment collected against a customer's outstanding
-    credit balance (reduces Accounts Receivable)."""
-
+class CustomerPaymentRequest(BaseModel):
     amount: float = Field(gt=0)
     method: str = Field(default="cash", pattern="^(cash|card|bank_transfer)$")
     reference: str | None = None
+
+
+class CustomerPaymentResponse(BaseModel):
+    id: uuid.UUID
+    customer_id: uuid.UUID
+    amount: float
+    method: str
+    reference: str | None
+    paid_at: datetime
+    note: str | None
+
+    model_config = {"from_attributes": True}
 
 
 class CustomerResponse(BaseModel):
@@ -114,6 +123,7 @@ class SupplierResponse(BaseModel):
     vat_number: str | None = None
     cr_number: str | None = None
     state_code: str | None
+    address: str | None = None
     payable_balance: float
     is_active: bool
 

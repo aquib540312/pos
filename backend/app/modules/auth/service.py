@@ -39,13 +39,14 @@ class AuthService:
         trade_name: str,
         default_state_code: str,
         gstin: str | None,
-        branch_code: str,
-        branch_name: str,
-        admin_full_name: str,
-        admin_email: str,
-        admin_password: str,
-        admin_phone: str | None,
-        plan_code: str,
+        vat_number: str | None = None,
+        branch_code: str = "MAIN",
+        branch_name: str = "Main Store",
+        admin_full_name: str = "",
+        admin_email: str = "",
+        admin_password: str = "",
+        admin_phone: str | None = None,
+        plan_code: str = "starter",
     ) -> tuple[User, str]:
         """Self-service tenant onboarding: one call creates the Organization,
         its first Branch/Warehouse, the standard role set, the admin User,
@@ -64,14 +65,15 @@ class AuthService:
             raise ConflictError(f"A user with email {admin_email} already exists")
 
         organization = Organization(
-            legal_name=legal_name, trade_name=trade_name, gstin=gstin, default_state_code=default_state_code,
+            legal_name=legal_name, trade_name=trade_name, gstin=gstin or vat_number,
+            default_state_code=default_state_code,
         )
         self.db.add(organization)
         self.db.flush()
 
         branch = Branch(
             organization_id=organization.id, code=branch_code, name=branch_name, business_type="grocery",
-            state_code=default_state_code, gstin=gstin,
+            state_code=default_state_code, gstin=gstin or vat_number,
         )
         self.db.add(branch)
         self.db.flush()
@@ -148,16 +150,20 @@ class AuthService:
     def list_users(self, organization_id: uuid.UUID) -> list[User]:
         return self.users.list(organization_id)
 
-    def set_active(self, actor_user_id: uuid.UUID, target_user_id: uuid.UUID, is_active: bool) -> User:
+    def set_active(self, organization_id: uuid.UUID, actor_user_id: uuid.UUID, target_user_id: uuid.UUID, is_active: bool) -> User:
         if actor_user_id == target_user_id and not is_active:
             raise ValidationError("You cannot deactivate your own account")
         user = self.get_user_or_404(target_user_id)
+        if user.organization_id != organization_id:
+            raise NotFoundError(f"User {target_user_id} not found")
         user.is_active = is_active
         self.db.flush()
         return user
 
-    def update_roles(self, user_id: uuid.UUID, role_ids: list[uuid.UUID]) -> User:
+    def update_roles(self, organization_id: uuid.UUID, user_id: uuid.UUID, role_ids: list[uuid.UUID]) -> User:
         user = self.get_user_or_404(user_id)
+        if user.organization_id != organization_id:
+            raise NotFoundError(f"User {user_id} not found")
         self.users.replace_roles(user_id, role_ids)
         self.db.flush()
         return user

@@ -205,14 +205,14 @@ export default function SalesHistoryPage() {
                   <th className="px-2 py-2">Qty</th>
                   <th className="px-2 py-2">Price</th>
                   <th className="px-2 py-2">Taxable</th>
-                  <th className="px-2 py-2">GST</th>
+                  <th className="px-2 py-2">VAT</th>
                   <th className="px-2 py-2">Total</th>
                 </tr>
               </thead>
               <tbody>
                 {selectedInvoice.items.map((item) => (
                   <tr key={item.id} className="border-b border-slate-100 last:border-0">
-                    <td className="px-2 py-2">{item.product_id.slice(0, 8)}</td>
+                    <td className="px-2 py-2">{item.product_name ?? item.product_id.slice(0, 8)}</td>
                     <td className="px-2 py-2">{item.quantity}</td>
                     <td className="px-2 py-2">SAR {item.unit_price.toFixed(2)}</td>
                     <td className="px-2 py-2">SAR {item.taxable_value.toFixed(2)}</td>

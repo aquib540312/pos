@@ -70,7 +70,7 @@ def test_render_receipt_shows_business_header_and_footer():
     render_receipt(printer, invoice)
     text = printer.output.decode("latin1")
     assert "Acme Mart" in text
-    assert "GSTIN: 27AAAAA0000A1Z5" in text
+    assert "VAT: 27AAAAA0000A1Z5" in text
     assert "Tel: +91 98200 12345" in text
     assert "No returns after 7 days." in text
 

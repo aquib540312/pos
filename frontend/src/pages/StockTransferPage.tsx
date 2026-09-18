@@ -45,7 +45,7 @@ interface DraftLine {
 
 function formatDateTime(iso: string | null) {
   if (!iso) return '-'
-  return new Date(iso).toLocaleString('en-IN')
+  return new Date(iso).toLocaleString('en-SA')
 }
 
 export default function StockTransferPage() {

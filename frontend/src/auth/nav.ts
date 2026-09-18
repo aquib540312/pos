@@ -27,6 +27,8 @@ export const NAV_ITEMS: NavItem[] = [
   { to: '/purchasing', label: 'Purchasing', permission: [PERMS.PURCHASE_CREATE, PERMS.PURCHASE_RECEIVE] },
   { to: '/stock', label: 'Stock', permission: PERMS.INVENTORY_VIEW },
   { to: '/stock-transfer', label: 'Stock Transfer', permission: PERMS.INVENTORY_VIEW },
+  { to: '/waste', label: 'Waste Tracking', permission: PERMS.INVENTORY_ADJUST },
+  { to: '/cutting', label: 'Cutting / Butchery', permission: PERMS.INVENTORY_ADJUST },
   { to: '/staff', label: 'Staff', permission: PERMS.USERS_MANAGE },
   { to: '/roles', label: 'Roles', permission: PERMS.ROLES_MANAGE },
   { to: '/branches', label: 'Branches & Warehouses', permission: PERMS.ORG_MANAGE },

@@ -5,7 +5,7 @@ import uuid
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from app.models.party import Customer, Supplier, SupplierPayment
+from app.models.party import Customer, CustomerPayment, Supplier, SupplierPayment
 
 
 class CustomerRepository:
@@ -46,6 +46,22 @@ class SupplierRepository:
         self.db.add(supplier)
         self.db.flush()
         return supplier
+
+
+class CustomerPaymentRepository:
+    def __init__(self, db: Session):
+        self.db = db
+
+    def add(self, payment: CustomerPayment) -> CustomerPayment:
+        self.db.add(payment)
+        self.db.flush()
+        return payment
+
+    def list(self, organization_id: uuid.UUID, customer_id: uuid.UUID | None = None) -> list[CustomerPayment]:
+        stmt = select(CustomerPayment).where(CustomerPayment.organization_id == organization_id)
+        if customer_id is not None:
+            stmt = stmt.where(CustomerPayment.customer_id == customer_id)
+        return list(self.db.execute(stmt.order_by(CustomerPayment.paid_at.desc())).scalars())
 
 
 class SupplierPaymentRepository:

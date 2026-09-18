@@ -46,7 +46,9 @@ def _profile_response(org: Organization) -> OrganizationProfileResponse:
         phone=org.phone,
         address=org.address,
         footer_note=org.footer_note,
+        tax_mode=org.tax_mode,
         has_logo=bool(org.logo_path),
+        vat_number=org.gstin,
     )
 
 

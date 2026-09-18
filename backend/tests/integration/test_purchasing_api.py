@@ -216,3 +216,30 @@ def test_goods_receipt_against_po_counts_only_paid_quantity_toward_received(clie
 
     po_after = client.get(f"/api/v1/purchasing/purchase-orders/{po_id}", headers=seeded_org["auth_headers"]).json()
     assert po_after["items"][0]["quantity_received"] == 100
+
+
+def test_goods_receipt_rejects_invalid_supplier(client, seeded_org):
+    resp = client.post(
+        "/api/v1/purchasing/goods-receipts",
+        headers=seeded_org["auth_headers"],
+        json={
+            "warehouse_id": str(seeded_org["warehouse"].id),
+            "supplier_id": str(uuid.uuid4()),
+            "items": [{"product_id": str(seeded_org["product"].id), "quantity": 10, "unit_cost": 30}],
+        },
+    )
+    assert resp.status_code == 404, resp.text
+
+
+def test_goods_receipt_rejects_invalid_product(client, seeded_org):
+    supplier_id = _create_supplier(client, seeded_org)
+    resp = client.post(
+        "/api/v1/purchasing/goods-receipts",
+        headers=seeded_org["auth_headers"],
+        json={
+            "warehouse_id": str(seeded_org["warehouse"].id),
+            "supplier_id": supplier_id,
+            "items": [{"product_id": str(uuid.uuid4()), "quantity": 10, "unit_cost": 30}],
+        },
+    )
+    assert resp.status_code == 404, resp.text

@@ -100,7 +100,7 @@ def generate_label_sheet_png(
         draw.text((10, 8), product_name[:28], fill=0, font=name_font)
         label.paste(barcode_img, (10, 32))
         draw.text((10, 108), code, fill=0, font=name_font)
-        draw.text((10, 128), f"MRP: Rs.{price:.2f}", fill=0, font=price_font)
+        draw.text((10, 128), f"MRP: SAR {price:.2f}", fill=0, font=price_font)
         return label
 
     rows = (copies + columns - 1) // columns

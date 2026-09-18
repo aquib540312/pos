@@ -105,15 +105,23 @@ def create_goods_receipt(
     db: Session = Depends(get_db),
     user: User = Depends(require_permission(Perm.PURCHASE_RECEIVE)),
 ):
-    grn = PurchasingService(db).receive_goods(
-        organization_id=user.organization_id,
-        warehouse_id=payload.warehouse_id,
-        supplier_id=payload.supplier_id,
-        purchase_order_id=payload.purchase_order_id,
-        supplier_invoice_number=payload.supplier_invoice_number,
-        items=[i.model_dump() for i in payload.items],
-    )
-    db.commit()
+    service = PurchasingService(db)
+    try:
+        grn = service.receive_goods(
+            organization_id=user.organization_id,
+            warehouse_id=payload.warehouse_id,
+            supplier_id=payload.supplier_id,
+            purchase_order_id=payload.purchase_order_id,
+            supplier_invoice_number=payload.supplier_invoice_number,
+            items=[i.model_dump() for i in payload.items],
+        )
+        db.commit()
+    except DomainError as exc:
+        db.rollback()
+        _raise_domain(exc)
+    except Exception:
+        db.rollback()
+        raise
     return grn
 
 

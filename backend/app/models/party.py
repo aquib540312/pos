@@ -77,3 +77,20 @@ class SupplierPayment(Base, UUIDPKMixin, TimestampMixin):
     reference: Mapped[str | None] = mapped_column(String(120))
     paid_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     note: Mapped[str | None] = mapped_column(String(255))
+
+
+class CustomerPayment(Base, UUIDPKMixin, TimestampMixin):
+    """A standalone payment against a customer's running credit balance
+    (reduces Accounts Receivable) -- the customer-side mirror of a
+    supplier payment. Credits cash/bank in the ledger, and the customer's
+    credit_balance is reduced by the applied amount."""
+
+    __tablename__ = "customer_payments"
+
+    organization_id: Mapped[uuid.UUID] = org_fk()
+    customer_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("customers.id"), nullable=False, index=True)
+    amount: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False)
+    method: Mapped[str] = mapped_column(String(20), nullable=False, default="cash")  # cash|card|bank_transfer
+    reference: Mapped[str | None] = mapped_column(String(120))
+    paid_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    note: Mapped[str | None] = mapped_column(String(255))
