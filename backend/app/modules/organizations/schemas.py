@@ -52,6 +52,7 @@ class OrganizationProfileUpdateRequest(BaseModel):
     address: str | None = Field(default=None, max_length=500)
     footer_note: str | None = Field(default=None, max_length=200)
     tax_mode: str | None = Field(default=None, max_length=10)
+    qr_enabled: bool | None = None
 
 
 class OrganizationProfileResponse(BaseModel):
@@ -67,3 +68,4 @@ class OrganizationProfileResponse(BaseModel):
     tax_mode: str
     has_logo: bool
     vat_number: str | None = None
+    qr_enabled: bool = False

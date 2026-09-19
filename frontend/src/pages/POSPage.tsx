@@ -324,6 +324,7 @@ export default function POSPage() {
                   >
                     <span>
                       {p.name} <span className="text-slate-400">({p.sku})</span>
+                      {p.barcode && <span className="ml-1 text-xs text-slate-400">[{p.barcode}]</span>}
                       {p.variant_label && <span className="ml-1 rounded bg-slate-200 px-1.5 py-0.5 text-xs dark:bg-slate-700">{p.variant_label}</span>}
                       {p.is_weighted && <span className="ml-1 text-xs text-indigo-500">weight</span>}
                     </span>
@@ -666,29 +667,47 @@ function Receipt({
             <hr className="my-2 border-dashed" />
           </>
         )}
-        <p className="text-center text-base font-bold">{isOfflinePending ? 'PROVISIONAL RECEIPT' : 'TAX INVOICE'}</p>
+        <p className="text-center text-base font-bold">
+          {isOfflinePending
+            ? 'إيصال مبدئي / PROVISIONAL RECEIPT'
+            : profile?.vat_number
+              ? 'فاتورة ضريبية / TAX INVOICE'
+              : 'فاتورة / INVOICE'}
+        </p>
         <p className="text-center text-xs">{invoice.invoice_number}</p>
         <p className="text-center text-xs">{new Date(invoice.invoice_date).toLocaleString('en-SA')}</p>
         <hr className="my-2 border-dashed" />
         {invoice.items.map((item) => (
-          <div key={item.id} className="mb-1 flex justify-between">
-            <span>{item.quantity} x SAR {item.unit_price.toFixed(2)}</span>
-            <span>SAR {item.line_total.toFixed(2)}</span>
+          <div key={item.id} className="mb-1">
+            <div className="flex justify-between">
+              <span className="truncate max-w-[70%]">{item.product_name ?? item.product_id.slice(0, 8)}</span>
+              <span>SAR {item.line_total.toFixed(2)}</span>
+            </div>
+            <div className="text-xs text-slate-500">
+              {item.barcode && <span className="mr-2">{item.barcode}</span>}
+              {item.quantity} x SAR {item.unit_price.toFixed(2)}
+            </div>
           </div>
         ))}
         <hr className="my-2 border-dashed" />
-        {isOfflinePending ? (
-          <div className="flex justify-between"><span>Subtotal (VAT pending sync)</span><span>SAR {invoice.taxable_total.toFixed(2)}</span></div>
+        {profile?.vat_number ? (
+          <>
+            {isOfflinePending ? (
+              <div className="flex justify-between"><span>المجموع الفرعي (ضريبة معلقة) / Subtotal</span><span>SAR {invoice.taxable_total.toFixed(2)}</span></div>
+            ) : (
+              <div className="flex justify-between"><span>القيمة الخاضعة للضريبة / Taxable value</span><span>SAR {invoice.taxable_total.toFixed(2)}</span></div>
+            )}
+            {invoice.vat_total > 0 && <div className="flex justify-between"><span>ضريبة القيمة المضافة (15%) / VAT</span><span>SAR {invoice.vat_total.toFixed(2)}</span></div>}
+          </>
         ) : (
-          <div className="flex justify-between"><span>Taxable value</span><span>SAR {invoice.taxable_total.toFixed(2)}</span></div>
+          <div className="flex justify-between"><span>المجموع / Subtotal</span><span>SAR {invoice.subtotal.toFixed(2)}</span></div>
         )}
-        {invoice.vat_total > 0 && <div className="flex justify-between"><span>VAT (15%)</span><span>SAR {invoice.vat_total.toFixed(2)}</span></div>}
         {invoice.coupon_discount_amount > 0 && (
-          <div className="flex justify-between"><span>Coupon ({invoice.coupon_code})</span><span>-SAR {invoice.coupon_discount_amount.toFixed(2)}</span></div>
+          <div className="flex justify-between"><span>الخصم / Coupon ({invoice.coupon_code})</span><span>-SAR {invoice.coupon_discount_amount.toFixed(2)}</span></div>
         )}
-        <div className="flex justify-between"><span>Round off</span><span>SAR {invoice.round_off.toFixed(2)}</span></div>
+        <div className="flex justify-between"><span>تقريب / Round off</span><span>SAR {invoice.round_off.toFixed(2)}</span></div>
         <hr className="my-2 border-dashed" />
-        <div className="flex justify-between text-base font-bold"><span>Grand Total</span><span>SAR {invoice.grand_total.toFixed(2)}</span></div>
+        <div className="flex justify-between text-base font-bold"><span>الإجمالي / Grand Total</span><span>SAR {invoice.grand_total.toFixed(2)}</span></div>
         <hr className="my-2 border-dashed" />
         {invoice.payments.map((p) => (
           <div key={p.id} className="flex justify-between"><span>{p.method.toUpperCase()}</span><span>SAR {p.amount.toFixed(2)}</span></div>
@@ -696,7 +715,16 @@ function Receipt({
         {profile?.footer_note ? (
           <p className="mt-4 text-center text-xs whitespace-pre-line">{profile.footer_note}</p>
         ) : (
-          <p className="mt-4 text-center text-xs">Thank you for shopping with us!</p>
+          <p className="mt-4 text-center text-xs">شكراً لتسوقكم معنا! / Thank you for shopping with us!</p>
+        )}
+        {invoice.qr_code_data && (
+          <div className="mt-3 flex justify-center print:mt-2">
+            <img
+              src={`data:image/png;base64,${invoice.qr_code_data}`}
+              alt="ZATCA QR"
+              className="h-20 w-20 print:h-16 print:w-16"
+            />
+          </div>
         )}
       </div>
     </div>

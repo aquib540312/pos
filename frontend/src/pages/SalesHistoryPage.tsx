@@ -16,44 +16,50 @@ export default function SalesHistoryPage() {
   const profile = useOrgStore((s) => s.profile)
 
   function printInvoice(inv: SaleInvoice) {
-    const bizName = profile?.trade_name || profile?.legal_name || 'Store'
     const w = window.open('', '_blank', 'width=400,height=700')
     if (!w) return
+    const bizName = profile?.trade_name || profile?.legal_name || 'Store'
     const payLines = inv.payments.map((p) => `<div style="display:flex;justify-content:space-between"><span>${p.method.toUpperCase()}</span><span>SAR ${p.amount.toFixed(2)}</span></div>`).join('')
-    const itemLines = inv.items.map((it) => `<tr><td>${it.product_name || it.product_id.slice(0, 8)}</td><td style="text-align:right">${it.quantity}</td><td style="text-align:right">SAR ${it.unit_price.toFixed(2)}</td><td style="text-align:right">SAR ${it.line_total.toFixed(2)}</td></tr>`).join('')
+    const itemLines = inv.items.map((it) => `<div style="margin:2px 0"><div style="display:flex;justify-content:space-between"><span>${it.product_name || it.product_id.slice(0, 8)}</span><span>SAR ${it.line_total.toFixed(2)}</span></div><div style="font-size:11px;color:#666">${it.barcode ? it.barcode + ' | ' : ''}${it.quantity} x SAR ${it.unit_price.toFixed(2)}</div></div>`).join('')
+    const offlinePending = inv.status === 'offline_pending'
     w.document.write(`<!DOCTYPE html><html><head><title>${inv.invoice_number}</title><style>
       *{margin:0;padding:0;box-sizing:border-box}
       body{font-family:'Courier New',monospace;font-size:13px;width:320px;margin:0 auto;padding:10px}
       .center{text-align:center}
       .bold{font-weight:700}
       .line{border-top:1px dashed #000;margin:6px 0}
-      table{width:100%;border-collapse:collapse}
-      td{padding:2px 0;font-size:12px}
+      .row{display:flex;justify-content:space-between}
       @media print{body{margin:0;padding:5px}}
     </style></head><body>
-      <div class="center bold" style="font-size:18px">${bizName}</div>
-      ${profile?.address ? `<div class="center">${profile.address}</div>` : ''}
-      ${profile?.phone ? `<div class="center">Tel: ${profile.phone}</div>` : ''}
-      ${profile?.vat_number ? `<div class="center">VAT: ${profile.vat_number}</div>` : ''}
+      ${profile?.has_logo ? `<div class="center"><img src="/org/logo.png" style="height:56px;object-fit:contain" /></div>` : ''}
+      <div class="center bold" style="font-size:14px">${bizName}</div>
+      ${profile?.address ? `<div class="center" style="font-size:11px;white-space:pre-line">${profile.address}</div>` : ''}
+      ${profile?.phone ? `<div class="center" style="font-size:11px">Tel: ${profile.phone}</div>` : ''}
+      ${profile?.vat_number ? `<div class="center" style="font-size:11px">VAT: ${profile.vat_number}</div>` : ''}
       <div class="line"></div>
-      <div class="center bold" style="font-size:15px">TAX INVOICE</div>
-      <div class="center">${inv.invoice_number}</div>
-      <div class="center">${new Date(inv.invoice_date).toLocaleString()}</div>
+      <div class="center bold" style="font-size:15px">${offlinePending ? 'إيصال مبدئي / PROVISIONAL RECEIPT' : (profile?.vat_number ? 'فاتورة ضريبية / TAX INVOICE' : 'فاتورة / INVOICE')}</div>
+      <div class="center" style="font-size:11px">${inv.invoice_number}</div>
+      <div class="center" style="font-size:11px">${new Date(inv.invoice_date).toLocaleString('en-SA')}</div>
       <div class="line"></div>
-      <table><thead><tr><th style="text-align:left">Item</th><th style="text-align:right">Qty</th><th style="text-align:right">Price</th><th style="text-align:right">Total</th></tr></thead>
-      <tbody>${itemLines}</tbody></table>
+      ${itemLines}
       <div class="line"></div>
-      <div style="display:flex;justify-content:space-between"><span>Subtotal</span><span>SAR ${inv.subtotal.toFixed(2)}</span></div>
-      <div style="display:flex;justify-content:space-between"><span>VAT (15%)</span><span>SAR ${inv.vat_total.toFixed(2)}</span></div>
-      ${inv.coupon_discount_amount ? `<div style="display:flex;justify-content:space-between"><span>Coupon (${inv.coupon_code || ''})</span><span>-SAR ${inv.coupon_discount_amount.toFixed(2)}</span></div>` : ''}
-      ${inv.round_off ? `<div style="display:flex;justify-content:space-between"><span>Round off</span><span>SAR ${inv.round_off.toFixed(2)}</span></div>` : ''}
+      ${profile?.vat_number
+        ? (offlinePending
+          ? `<div class="row"><span>المجموع الفرعي (ضريبة معلقة) / Subtotal</span><span>SAR ${inv.taxable_total.toFixed(2)}</span></div>`
+          : `<div class="row"><span>القيمة الخاضعة للضريبة / Taxable value</span><span>SAR ${inv.taxable_total.toFixed(2)}</span></div>`)
+        : `<div class="row"><span>المجموع / Subtotal</span><span>SAR ${inv.subtotal.toFixed(2)}</span></div>`
+      }
+      ${profile?.vat_number && inv.vat_total > 0 ? `<div class="row"><span>ضريبة القيمة المضافة (15%) / VAT</span><span>SAR ${inv.vat_total.toFixed(2)}</span></div>` : ''}
+      ${inv.coupon_discount_amount > 0 ? `<div class="row"><span>الخصم / Coupon (${inv.coupon_code || ''})</span><span>-SAR ${inv.coupon_discount_amount.toFixed(2)}</span></div>` : ''}
+      <div class="row"><span>تقريب / Round off</span><span>SAR ${inv.round_off.toFixed(2)}</span></div>
       <div class="line"></div>
-      <div style="display:flex;justify-content:space-between" class="bold" style="font-size:15px"><span class="bold" style="font-size:15px">GRAND TOTAL</span><span class="bold" style="font-size:15px">SAR ${inv.grand_total.toFixed(2)}</span></div>
+      <div class="row bold" style="font-size:15px"><span>الإجمالي / Grand Total</span><span>SAR ${inv.grand_total.toFixed(2)}</span></div>
       <div class="line"></div>
       ${payLines}
       <div class="line"></div>
-      <div class="center">${profile?.footer_note || 'Thank you for shopping with us!'}</div>
+      <div class="center" style="font-size:11px">${profile?.footer_note || 'شكراً لتسوقكم معنا! / Thank you for shopping with us!'}</div>
       <div class="line"></div>
+      ${inv.qr_code_data ? `<div class="center"><img src="data:image/png;base64,${inv.qr_code_data}" style="height:80px;width:80px" /></div>` : ''}
     </body></html>`)
     w.document.close()
     w.print()
@@ -246,43 +252,81 @@ export default function SalesHistoryPage() {
 
       {selectedInvoice && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setSelectedInvoice(null)}>
-          <div className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white p-6 dark:bg-slate-800" onClick={(e) => e.stopPropagation()}>
-            <h2 className="mb-4 text-xl font-semibold text-slate-900 dark:text-slate-50">{selectedInvoice.invoice_number}</h2>
-            <p className="mb-4 text-sm text-slate-500">Date: {new Date(selectedInvoice.invoice_date).toLocaleString()}</p>
-            <table className="mb-4 w-full text-left text-sm">
-              <thead className="border-b text-slate-500">
-                <tr>
-                  <th className="px-2 py-2">Product</th>
-                  <th className="px-2 py-2">Qty</th>
-                  <th className="px-2 py-2">Price</th>
-                  <th className="px-2 py-2">Taxable</th>
-                  <th className="px-2 py-2">VAT</th>
-                  <th className="px-2 py-2">Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {selectedInvoice.items.map((item) => (
-                  <tr key={item.id} className="border-b border-slate-100 last:border-0">
-                    <td className="px-2 py-2">{item.product_name ?? item.product_id.slice(0, 8)}</td>
-                    <td className="px-2 py-2">{item.quantity}</td>
-                    <td className="px-2 py-2">SAR {item.unit_price.toFixed(2)}</td>
-                    <td className="px-2 py-2">SAR {item.taxable_value.toFixed(2)}</td>
-                    <td className="px-2 py-2">SAR {item.vat_amount.toFixed(2)}</td>
-                    <td className="px-2 py-2">SAR {item.line_total.toFixed(2)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <div className="mb-4 text-right">
-              <p className="text-sm">Subtotal: SAR {selectedInvoice.subtotal.toFixed(2)}</p>
-              <p className="text-sm">VAT: SAR {selectedInvoice.vat_total.toFixed(2)}</p>
-              <p className="text-lg font-semibold">Grand Total: SAR {selectedInvoice.grand_total.toFixed(2)}</p>
-            </div>
-            <div className="flex justify-end gap-2">
+          <div className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-xl border border-slate-200 bg-white p-6 font-mono text-sm dark:border-slate-800 dark:bg-slate-800" onClick={(e) => e.stopPropagation()}>
+            {(profile?.has_logo || profile?.trade_name || profile?.legal_name) && (
+              <>
+                {profile?.has_logo && <img src="/org/logo.png" alt="Store logo" className="mx-auto mb-1 h-14 object-contain" />}
+                <p className="text-center text-sm font-bold">{profile?.trade_name || profile?.legal_name}</p>
+                {profile?.address && <p className="whitespace-pre-line text-center text-xs">{profile.address}</p>}
+                {profile?.phone && <p className="text-center text-xs">Tel: {profile.phone}</p>}
+                {profile?.vat_number && <p className="text-center text-xs">VAT: {profile.vat_number}</p>}
+                <hr className="my-2 border-dashed" />
+              </>
+            )}
+            <p className="text-center text-base font-bold">
+              {selectedInvoice.status === 'offline_pending'
+                ? 'إيصال مبدئي / PROVISIONAL RECEIPT'
+                : profile?.vat_number
+                  ? 'فاتورة ضريبية / TAX INVOICE'
+                  : 'فاتورة / INVOICE'}
+            </p>
+            <p className="text-center text-xs">{selectedInvoice.invoice_number}</p>
+            <p className="text-center text-xs">{new Date(selectedInvoice.invoice_date).toLocaleString('en-SA')}</p>
+            <hr className="my-2 border-dashed" />
+            {selectedInvoice.items.map((item) => (
+              <div key={item.id} className="mb-1">
+                <div className="flex justify-between">
+                  <span className="truncate max-w-[70%]">{item.product_name ?? item.product_id.slice(0, 8)}</span>
+                  <span>SAR {item.line_total.toFixed(2)}</span>
+                </div>
+                <div className="text-xs text-slate-500">
+                  {item.barcode && <span className="mr-2">{item.barcode}</span>}
+                  {item.quantity} x SAR {item.unit_price.toFixed(2)}
+                </div>
+              </div>
+            ))}
+            <hr className="my-2 border-dashed" />
+            {profile?.vat_number ? (
+              <>
+                {selectedInvoice.status === 'offline_pending' ? (
+                  <div className="flex justify-between"><span>المجموع الفرعي (ضريبة معلقة) / Subtotal</span><span>SAR {selectedInvoice.taxable_total.toFixed(2)}</span></div>
+                ) : (
+                  <div className="flex justify-between"><span>القيمة الخاضعة للضريبة / Taxable value</span><span>SAR {selectedInvoice.taxable_total.toFixed(2)}</span></div>
+                )}
+                {selectedInvoice.vat_total > 0 && <div className="flex justify-between"><span>ضريبة القيمة المضافة (15%) / VAT</span><span>SAR {selectedInvoice.vat_total.toFixed(2)}</span></div>}
+              </>
+            ) : (
+              <div className="flex justify-between"><span>المجموع / Subtotal</span><span>SAR {selectedInvoice.subtotal.toFixed(2)}</span></div>
+            )}
+            {selectedInvoice.coupon_discount_amount > 0 && (
+              <div className="flex justify-between"><span>Coupon ({selectedInvoice.coupon_code})</span><span>-SAR {selectedInvoice.coupon_discount_amount.toFixed(2)}</span></div>
+            )}
+            <div className="flex justify-between"><span>تقريب / Round off</span><span>SAR {selectedInvoice.round_off.toFixed(2)}</span></div>
+            <hr className="my-2 border-dashed" />
+            <div className="flex justify-between text-base font-bold"><span>الإجمالي / Grand Total</span><span>SAR {selectedInvoice.grand_total.toFixed(2)}</span></div>
+            <hr className="my-2 border-dashed" />
+            {selectedInvoice.payments.map((p) => (
+              <div key={p.id} className="flex justify-between"><span>{p.method.toUpperCase()}</span><span>SAR {p.amount.toFixed(2)}</span></div>
+            ))}
+            {profile?.footer_note ? (
+              <p className="mt-4 text-center text-xs whitespace-pre-line">{profile.footer_note}</p>
+            ) : (
+              <p className="mt-4 text-center text-xs">شكراً لتسوقكم معنا! / Thank you for shopping with us!</p>
+            )}
+            {selectedInvoice.qr_code_data && (
+              <div className="mt-3 flex justify-center">
+                <img
+                  src={`data:image/png;base64,${selectedInvoice.qr_code_data}`}
+                  alt="ZATCA QR"
+                  className="h-20 w-20"
+                />
+              </div>
+            )}
+            <div className="mt-4 flex justify-end gap-2 print:hidden">
               <button onClick={() => setSelectedInvoice(null)} className="rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 dark:bg-slate-700 dark:text-slate-200">
                 Close
               </button>
-              <button onClick={() => printInvoice(selectedInvoice)} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500">
+              <button onClick={() => printInvoice(selectedInvoice)} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500">
                 Print Receipt
               </button>
               {canReturn && selectedInvoice.status === 'posted' && (

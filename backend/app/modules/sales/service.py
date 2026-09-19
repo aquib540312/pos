@@ -19,6 +19,7 @@ from app.modules.loyalty.service import CouponService, GiftCardService, LoyaltyS
 from app.modules.party.repository import CustomerRepository
 from app.modules.party.service import PartyService
 from app.modules.sales.repository import QuotationRepository, SalesInvoiceRepository, SalesReturnRepository
+from app.modules.zatca import generate_zatca_qr_data, generate_zatca_qr_png
 
 
 class SalesService:
@@ -241,6 +242,23 @@ class SalesService:
 
         if coupon is not None:
             self.coupons.redeem(coupon)
+
+        # Generate ZATCA QR code only if enabled in org settings
+        from app.models.organization import Organization
+
+        org = self.db.get(Organization, organization_id)
+        if org and getattr(org, "qr_enabled", False):
+            seller_name = org.trade_name or org.legal_name or ""
+            seller_vat = org.gstin or ""
+            qr_tlv = generate_zatca_qr_data(
+                seller_name=seller_name,
+                vat_number=seller_vat,
+                invoice_date=invoice.invoice_date,
+                total_with_vat=grand_total,
+                vat_amount=vat_total,
+            )
+            import base64 as _b64
+            invoice.qr_code_data = _b64.b64encode(generate_zatca_qr_png(qr_tlv)).decode("ascii")
 
         if gift_card_number and gift_card_amount > 0:
             redeemed = self.gift_cards.redeem(organization_id, gift_card_number, gift_card_amount, invoice.id)

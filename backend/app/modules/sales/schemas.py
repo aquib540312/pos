@@ -44,6 +44,7 @@ class SaleInvoiceItemResponse(BaseModel):
     id: uuid.UUID
     product_id: uuid.UUID
     product_name: str | None = None
+    barcode: str | None = None
     batch_id: uuid.UUID | None
     quantity: float
     unit_price: float
@@ -84,6 +85,7 @@ class SaleInvoiceResponse(BaseModel):
     loyalty_points_redeemed: float
     coupon_code: str | None
     coupon_discount_amount: float
+    qr_code_data: str | None = None
     items: list[SaleInvoiceItemResponse]
     payments: list[PaymentResponse]
 

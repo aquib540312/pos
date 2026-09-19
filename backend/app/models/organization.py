@@ -27,6 +27,7 @@ class Organization(Base, UUIDPKMixin, TimestampMixin):
     phone: Mapped[str | None] = mapped_column(String(20))
     address: Mapped[str | None] = mapped_column(String(500))
     footer_note: Mapped[str | None] = mapped_column(String(200))
+    qr_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     branches: Mapped[list["Branch"]] = relationship(back_populates="organization")
 

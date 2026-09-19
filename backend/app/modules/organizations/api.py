@@ -49,6 +49,7 @@ def _profile_response(org: Organization) -> OrganizationProfileResponse:
         tax_mode=org.tax_mode,
         has_logo=bool(org.logo_path),
         vat_number=org.gstin,
+        qr_enabled=getattr(org, "qr_enabled", False),
     )
 
 

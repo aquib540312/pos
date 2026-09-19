@@ -17,7 +17,7 @@ interface Branch {
   warehouses: Warehouse[]
 }
 
-const VAT_SLABS = [0, 5, 15]
+const VAT_SLABS = [0, 15]
 
 interface ProductForm {
   sku: string
@@ -138,13 +138,29 @@ export default function ProductsPage() {
   useEffect(() => {
     loadProducts()
     apiClient.get<UOM[]>('/catalog/uom').then((r) => setUoms(r.data))
-    apiClient.get<HSN[]>('/catalog/hsn').then((r) => setHsnCodes(r.data))
+    apiClient.get<HSN[]>('/catalog/hsn').then((r) => {
+      setHsnCodes(r.data)
+      if (taxMode === 'saudi') {
+        const today = new Date().toISOString().split('T')[0]
+        const missing = VAT_SLABS.filter((rate) => !r.data.some((h) => Math.round(h.current_rate_percent ?? -1) === rate))
+        missing.forEach((rate) => {
+          apiClient.post('/catalog/hsn', {
+            code: `VAT${rate}`,
+            description: `Saudi VAT ${rate}%`,
+            is_service: false,
+            rate_percent: rate,
+            cess_percent: 0,
+            effective_from: today,
+          }).then((res) => setHsnCodes((prev) => [...prev, res.data]))
+        })
+      }
+    })
     apiClient.get<Category[]>('/catalog/categories').then((r) => setCategories(r.data))
     apiClient
       .get<Branch[]>('/org/branches')
       .then((res) => setBranches(res.data))
       .catch(() => setBranches([]))
-  }, [])
+  }, [taxMode])
 
   function startEdit(p: Product) {
     setEditingId(p.id)
@@ -590,9 +606,15 @@ export default function ProductsPage() {
           <div className="col-span-2">
             <select value={form.hsn_code_id} onChange={(e) => setForm({ ...form, hsn_code_id: e.target.value })} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100">
               <option value="">{taxMode === 'saudi' ? 'Tax rate...' : 'HSN / GST rate...'}</option>
-              {hsnCodes.map((h) => (
-                <option key={h.id} value={h.id}>{h.current_rate_percent != null ? `${h.current_rate_percent}%` : h.code}</option>
-              ))}
+              {taxMode === 'saudi' ? (
+                hsnCodes.filter((h) => [0, 15].includes(Math.round(h.current_rate_percent ?? -1))).map((h) => (
+                  <option key={h.id} value={h.id}>{h.current_rate_percent != null ? `${h.current_rate_percent}%` : h.code}</option>
+                ))
+              ) : (
+                hsnCodes.map((h) => (
+                  <option key={h.id} value={h.id}>{h.current_rate_percent != null ? `${h.current_rate_percent}%` : h.code}</option>
+                ))
+              )}
             </select>
             <div className="mt-1 flex flex-wrap gap-1">
               <span className="text-xs text-slate-400 dark:text-slate-500">Quick Tax:</span>
@@ -720,6 +742,7 @@ export default function ProductsPage() {
               <th className="px-4 py-3">Beef Cut</th>
               <th className="px-4 py-3">Brand</th>
               <th className="px-4 py-3">Category</th>
+              <th className="px-4 py-3">Tax</th>
               <th className="px-4 py-3">MRP</th>
               <th className="px-4 py-3">Sale</th>
               <th className="px-4 py-3" />
@@ -740,6 +763,7 @@ export default function ProductsPage() {
                 <td className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">{p.beef_cut ?? '—'}</td>
                 <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{p.brand ?? '—'}</td>
                 <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{p.category_name ?? '—'}</td>
+                <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{p.tax_rate_percent != null ? `${p.tax_rate_percent}%` : '—'}</td>
                 <td className="px-4 py-3 text-slate-600 dark:text-slate-300">SAR {p.mrp.toFixed(2)}</td>
                 <td className="px-4 py-3 text-slate-600 dark:text-slate-300">SAR {p.sale_price.toFixed(2)}{p.prices_gst_inclusive ? ' (inc VAT)' : ''}</td>
                 <td className="px-4 py-3 text-right whitespace-nowrap">

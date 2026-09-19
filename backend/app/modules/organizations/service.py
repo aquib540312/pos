@@ -33,6 +33,8 @@ class OrganizationService:
                 setattr(org, field, updates[field] or None)
         if "tax_mode" in updates:
             org.tax_mode = updates["tax_mode"] or "vat"
+        if "qr_enabled" in updates:
+            org.qr_enabled = bool(updates["qr_enabled"])
         self.db.flush()
         return org
 

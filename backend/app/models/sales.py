@@ -2,7 +2,7 @@ import uuid
 from datetime import date, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, UniqueConstraint
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -106,6 +106,9 @@ class SalesInvoice(Base, UUIDPKMixin, TimestampMixin):
     coupon_code: Mapped[str | None] = mapped_column(String(40), nullable=True)
     coupon_discount_amount: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False), nullable=False, default=0)
 
+    # ZATCA e-invoicing: Base64-encoded QR code PNG image
+    qr_code_data: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     items: Mapped[list["SalesInvoiceItem"]] = relationship(back_populates="invoice")
     payments: Mapped[list["Payment"]] = relationship("Payment", back_populates="invoice")
 
@@ -138,6 +141,10 @@ class SalesInvoiceItem(Base, UUIDPKMixin):
     @property
     def product_name(self) -> str | None:
         return self.product.name if self.product else None
+
+    @property
+    def barcode(self) -> str | None:
+        return self.product.barcode if self.product else None
 
 
 class SalesReturn(Base, UUIDPKMixin, TimestampMixin):

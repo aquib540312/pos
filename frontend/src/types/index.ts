@@ -222,6 +222,7 @@ export interface SaleInvoiceItem {
   id: string
   product_id: string
   product_name?: string
+  barcode?: string
   quantity: number
   unit_price: number
   discount_amount: number
@@ -375,6 +376,7 @@ export interface SaleInvoice {
   loyalty_points_redeemed: number
   coupon_code: string | null
   coupon_discount_amount: number
+  qr_code_data: string | null
   items: SaleInvoiceItem[]
   payments: PaymentResponse[]
 }
@@ -576,6 +578,7 @@ export interface OrgProfile {
   footer_note: string | null
   tax_mode: string
   has_logo: boolean
+  qr_enabled: boolean
 }
 
 export interface DiningTable {

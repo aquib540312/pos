@@ -19,6 +19,7 @@ export default function SettingsPage() {
     address: '',
     footer_note: '',
     tax_mode: 'saudi',
+    qr_enabled: false,
   })
   const [profileError, setProfileError] = useState<string | null>(null)
   const [profileMessage, setProfileMessage] = useState<string | null>(null)
@@ -40,6 +41,7 @@ export default function SettingsPage() {
           address: data.address ?? '',
           footer_note: data.footer_note ?? '',
           tax_mode: data.tax_mode ?? 'saudi',
+          qr_enabled: data.qr_enabled ?? false,
         })
       })
       .catch(() => setProfile(null))
@@ -106,6 +108,7 @@ export default function SettingsPage() {
         address: profileForm.address.trim() || null,
         footer_note: profileForm.footer_note.trim() || null,
         tax_mode: profileForm.tax_mode,
+        qr_enabled: profileForm.qr_enabled,
       })
       setProfile(data)
       setProfileMessage('Business profile updated. Receipts will use the new details.')
@@ -232,6 +235,22 @@ export default function SettingsPage() {
               className={inputClass}
               placeholder="e.g. Goods once sold will not be taken back."
             />
+          </div>
+          <div className="sm:col-span-2">
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={profileForm.qr_enabled}
+                onChange={(e) => setProfileForm({ ...profileForm, qr_enabled: e.target.checked })}
+                className="h-5 w-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+              />
+              <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                Enable ZATCA QR Code on invoices
+              </span>
+            </label>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              Requires VAT registration. Enable once your business is VAT registered with ZATCA.
+            </p>
           </div>
           <div className="sm:col-span-2">
             <button
