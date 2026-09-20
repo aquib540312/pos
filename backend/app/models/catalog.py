@@ -1,11 +1,17 @@
+from __future__ import annotations
+
 import uuid
 from datetime import date
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, Date, ForeignKey, Numeric, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 from app.models.mixins import GUID, TimestampMixin, UUIDPKMixin, org_fk
+
+if TYPE_CHECKING:
+    from app.models.party import Supplier
 
 
 class Category(Base, UUIDPKMixin, TimestampMixin):

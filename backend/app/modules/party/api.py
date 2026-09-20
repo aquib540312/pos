@@ -47,7 +47,7 @@ def create_customer(
         db.commit()
     except IntegrityError:
         db.rollback()
-        raise HTTPException(status.HTTP_409_CONFLICT, f"A customer with this phone number already exists")
+        raise HTTPException(status.HTTP_409_CONFLICT, "A customer with this phone number already exists")
     return customer
 
 
@@ -129,7 +129,7 @@ def list_customer_payments(
     customer_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(require_permission(Perm.PARTY_MANAGE))
 ):
     service = PartyService(db)
-    customer = service.get_customer_or_404(customer_id)
+    service.get_customer_or_404(customer_id)
     return service.customer_payments.list(user.organization_id, customer_id)
 
 

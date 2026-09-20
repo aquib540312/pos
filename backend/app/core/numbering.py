@@ -73,11 +73,13 @@ def next_document_number(
 
     if counter is None:
         base = _max_existing_number(db, model, organization_id)
+        savepoint = db.begin_nested()
         try:
             db.add(DocumentCounter(organization_id=organization_id, prefix=prefix, year=year, last_number=base))
             db.flush()
+            savepoint.commit()
         except IntegrityError:
-            db.rollback()
+            savepoint.rollback()
         counter = db.execute(
             select(DocumentCounter)
             .where(

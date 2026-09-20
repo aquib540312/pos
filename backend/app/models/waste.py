@@ -1,10 +1,16 @@
+from __future__ import annotations
+
 import uuid
+from typing import TYPE_CHECKING
 
 from sqlalchemy import ForeignKey, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 from app.models.mixins import GUID, TimestampMixin, UUIDPKMixin, org_fk
+
+if TYPE_CHECKING:
+    from app.models.catalog import Product
 
 
 class WasteEntry(Base, UUIDPKMixin, TimestampMixin):

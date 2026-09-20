@@ -358,13 +358,10 @@ class DiningService:
         re-derivation drift)."""
         order = self._open_order_or_404(organization_id, order_id)
 
-        from app.models.party import Customer as CustomerModel
         from app.modules.catalog.repository import HSNRepository, ProductRepository
 
         products_repo = ProductRepository(self.db)
         hsn = HSNRepository(self.db)
-        branch = self.db.get(Branch, order.branch_id)
-        customer = self.db.get(CustomerModel, order.customer_id) if order.customer_id else None
 
         subtotal = discount_total = taxable_total = 0.0
         vat_total = 0.0

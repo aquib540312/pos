@@ -7,8 +7,6 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.models.sales import Quotation, QuotationItem, SalesInvoice, SalesInvoiceItem, SalesReturn
 
-from app.models.catalog import Product
-
 
 class SalesInvoiceRepository:
     def __init__(self, db: Session):

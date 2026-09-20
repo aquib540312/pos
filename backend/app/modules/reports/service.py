@@ -19,7 +19,7 @@ try:
     from app.models.waste import WasteEntry
 except ImportError:
     WasteEntry = None  # type: ignore[assignment, misc]
-from app.modules.gst_filing.schema_builder import B2BInvoiceLine, B2BInvoiceRateItem, B2CSLine
+from app.modules.gst_filing.schema_builder import B2BInvoiceLine, B2CSLine
 from app.modules.notifications.service import NotificationService
 from app.modules.reports.schemas import (
     BalanceSheetResponse,
