@@ -56,7 +56,10 @@ def get_customer(
     customer_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(require_permission(Perm.PARTY_MANAGE))
 ):
     try:
-        return PartyService(db).get_customer_or_404(customer_id)
+        customer = PartyService(db).get_customer_or_404(customer_id)
+        if customer.organization_id != user.organization_id:
+            raise NotFoundError(f"Customer {customer_id} not found")
+        return customer
     except NotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
 
@@ -155,7 +158,10 @@ def get_supplier(
     supplier_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(require_permission(Perm.PARTY_MANAGE))
 ):
     try:
-        return PartyService(db).get_supplier_or_404(supplier_id)
+        supplier = PartyService(db).get_supplier_or_404(supplier_id)
+        if supplier.organization_id != user.organization_id:
+            raise NotFoundError(f"Supplier {supplier_id} not found")
+        return supplier
     except NotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
 

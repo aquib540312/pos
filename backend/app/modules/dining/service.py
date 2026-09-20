@@ -373,8 +373,10 @@ class DiningService:
             if item.status == "cancelled":
                 continue
             product = products_repo.get(item.product_id)
-            tax_rate = hsn.get_effective_tax_rate(product.hsn_code_id, datetime.now(timezone.utc).date()) if product else None
-            if product is None or product.hsn_code_id is None or tax_rate is None:
+            if product is None or product.hsn_code_id is None:
+                raise ValidationError(f"No effective VAT rate configured for product '{item.product_id}'")
+            tax_rate = hsn.get_effective_tax_rate(product.hsn_code_id, datetime.now(timezone.utc).date())
+            if tax_rate is None:
                 raise ValidationError(f"No effective VAT rate configured for product '{item.product_id}'")
             breakdown = compute_line_tax(
                 quantity=float(item.quantity),

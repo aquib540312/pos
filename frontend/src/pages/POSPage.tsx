@@ -160,8 +160,12 @@ export default function POSPage() {
       setSearchResults([])
       return
     }
-    const res = await apiClient.get<Product[]>('/catalog/products', { params: { search: q } })
-    setSearchResults(res.data)
+    try {
+      const res = await apiClient.get<Product[]>('/catalog/products', { params: { search: q } })
+      setSearchResults(res.data)
+    } catch {
+      setSearchResults([])
+    }
   }
 
   async function handleBarcodeEnter() {
@@ -203,8 +207,12 @@ export default function POSPage() {
       setCustomerResults([])
       return
     }
-    const res = await apiClient.get<Customer[]>('/party/customers', { params: { search: q } })
-    setCustomerResults(res.data)
+    try {
+      const res = await apiClient.get<Customer[]>('/party/customers', { params: { search: q } })
+      setCustomerResults(res.data)
+    } catch {
+      setCustomerResults([])
+    }
   }
 
   function updatePayment(index: number, patch: Partial<PaymentLine>) {
@@ -360,7 +368,10 @@ export default function POSPage() {
                         min={0.001}
                         step={line.product.is_weighted ? 0.001 : 1}
                         value={line.quantity}
-                        onChange={(e) => updateLine(line.product.id, { quantity: Number(e.target.value) })}
+                        onChange={(e) => {
+                          const qty = Math.max(0.001, Number(e.target.value) || 0.001)
+                          updateLine(line.product.id, { quantity: qty })
+                        }}
                         className="w-20 rounded border border-slate-300 px-2 py-1 dark:border-slate-600 dark:bg-slate-700"
                       />
                     </td>

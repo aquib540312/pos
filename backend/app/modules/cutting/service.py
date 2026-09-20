@@ -40,7 +40,7 @@ class CuttingService:
 
     def complete_order(self, organization_id: uuid.UUID, order_id: uuid.UUID) -> CuttingOrder:
         order = self.db.query(CuttingOrder).filter_by(id=order_id).first()
-        if not order:
+        if not order or order.organization_id != organization_id:
             raise ValueError("Cutting order not found")
         if order.status != "pending":
             raise ValueError("Order is not in pending status")

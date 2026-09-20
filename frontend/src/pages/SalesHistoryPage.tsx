@@ -330,8 +330,8 @@ export default function SalesHistoryPage() {
                 Print Receipt
               </button>
               {canReturn && selectedInvoice.status === 'posted' && (
-                <button onClick={() => handleCancel(selectedInvoice.id)} className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-500">
-                  Cancel Invoice
+                <button onClick={() => handleCancel(selectedInvoice.id)} disabled={cancelling === selectedInvoice.id} className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-50">
+                  {cancelling === selectedInvoice.id ? 'Cancelling...' : 'Cancel Invoice'}
                 </button>
               )}
             </div>

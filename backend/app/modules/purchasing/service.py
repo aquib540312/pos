@@ -85,6 +85,13 @@ class PurchasingService:
         if supplier is None or supplier.organization_id != organization_id:
             raise NotFoundError(f"Supplier {supplier_id} not found")
 
+        warehouse = self.db.get(Warehouse, warehouse_id)
+        if warehouse is None:
+            raise NotFoundError(f"Warehouse {warehouse_id} not found")
+        warehouse_branch = self.db.get(Branch, warehouse.branch_id)
+        if warehouse_branch is None or warehouse_branch.organization_id != organization_id:
+            raise NotFoundError(f"Warehouse {warehouse_id} not found")
+
         grn = GoodsReceipt(
             organization_id=organization_id,
             purchase_order_id=purchase_order_id,
@@ -277,6 +284,11 @@ class PurchasingService:
             raise NotFoundError(f"Branch {branch_id} not found")
         if warehouse is None:
             raise NotFoundError(f"Warehouse {warehouse_id} not found")
+        wh_branch = self.db.get(Branch, warehouse.branch_id)
+        if wh_branch is None or wh_branch.organization_id != organization_id:
+            raise NotFoundError(f"Warehouse {warehouse_id} not found")
+        if warehouse is None:
+            raise NotFoundError(f"Warehouse {warehouse_id} not found")
 
         grn = None
         if goods_receipt_id is not None:
@@ -333,7 +345,12 @@ class PurchasingService:
                 taxable_value = round(discounted_taxable * fraction, 2)
                 vat_amount = round(float(grn_item.vat_amount) * fraction, 2)
             else:
-                vat_amount = round(taxable_value * 0.15, 2)  # Default 15% VAT
+                product = self.db.get(Product, item["product_id"])
+                tax_rate = 0.0
+                if product is not None and product.hsn_code_id is not None:
+                    rate = HSNRepository(self.db).get_effective_tax_rate(product.hsn_code_id, date.today())
+                    tax_rate = float(rate.rate_percent) if rate else 0.0
+                vat_amount = round(taxable_value * tax_rate / 100, 2)
             line_total = round(taxable_value + vat_amount, 2)
 
             self.db.add(

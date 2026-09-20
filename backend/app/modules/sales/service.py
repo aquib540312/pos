@@ -228,6 +228,8 @@ class SalesService:
         pre_round_total = (
             taxable_total + vat_total - loyalty_discount - coupon_discount
         )
+        if pre_round_total < 0:
+            raise ValidationError("Discounts (loyalty + coupon) exceed the order total")
         grand_total, round_off = round_invoice_total(pre_round_total)
 
         invoice.subtotal = subtotal
@@ -305,7 +307,8 @@ class SalesService:
             payment_rows.append(row)
 
         if customer is not None:
-            self.loyalty.earn(customer, invoice.id, loyalty_taxable_total)
+            earned = self.loyalty.earn(customer, invoice.id, loyalty_taxable_total)
+            invoice.loyalty_points_earned = earned
 
         self.db.flush()
         credit_shortfall = shortfall if (is_credit_sale and shortfall > 0.01) else 0.0
@@ -328,7 +331,7 @@ class SalesService:
         VAT proportionally to the fraction of the original line quantity
         being returned. Supports weight-based returns."""
         original_invoice = self.invoices.get(original_invoice_id)
-        if original_invoice is None:
+        if original_invoice is None or original_invoice.organization_id != organization_id:
             raise NotFoundError(f"Invoice {original_invoice_id} not found")
 
         sales_return = SalesReturn(
@@ -351,9 +354,9 @@ class SalesService:
                 raise ValidationError("Cannot return more than the originally sold quantity")
 
             fraction = line["quantity"] / float(original_item.quantity)
-            taxable_value = round(float(original_item.taxable_value) * fraction, 2)
-            vat_amount = round(float(original_item.vat_amount) * fraction, 2)
-            line_total = round(taxable_value + vat_amount, 2)
+            taxable_value = round_money(float(original_item.taxable_value) * fraction)
+            vat_amount = round_money(float(original_item.vat_amount) * fraction)
+            line_total = round_money(taxable_value + vat_amount)
 
             self._receive_stock_for_return_line(
                 organization_id, warehouse_id, original_item.product_id, original_item.batch_id, line["quantity"],
@@ -408,7 +411,7 @@ class SalesService:
         invoice can never be returned against again (its lines are gone
         from the sale in the accounting sense)."""
         invoice = self.invoices.get(invoice_id)
-        if invoice is None:
+        if invoice is None or invoice.organization_id != organization_id:
             raise NotFoundError(f"Invoice {invoice_id} not found")
         if invoice.status != "posted":
             raise ConflictError(f"Invoice {invoice.invoice_number} is not in posted status")
