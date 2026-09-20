@@ -107,7 +107,7 @@ class GoodsReceiptResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 class PurchaseOrderStatusUpdateRequest(BaseModel):
-    status: str = Field(pattern="^(draft|submitted|cancelled|closed)$")
+    status: str = Field(pattern="^(draft|submitted|cancelled|closed|received)$")
 
 
 class PendingGRNItem(BaseModel):

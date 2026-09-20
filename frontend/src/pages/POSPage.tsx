@@ -124,7 +124,8 @@ export default function POSPage() {
   // (net of gift card redemption) so the common case needs no manual
   // entry; split-tender users editing multiple rows are left alone.
   useEffect(() => {
-    const dueAfterGiftCard = Math.max(0, estimate.grandTotalEstimate - (giftCardAmount || 0))
+    const clampedGiftCard = Math.min(giftCardAmount || 0, estimate.grandTotalEstimate)
+    const dueAfterGiftCard = Math.max(0, estimate.grandTotalEstimate - clampedGiftCard)
     setPayments((prev) => (prev.length === 1 ? [{ ...prev[0], amount: dueAfterGiftCard }] : prev))
   }, [estimate.grandTotalEstimate, giftCardAmount])
 
@@ -166,6 +167,12 @@ export default function POSPage() {
     } catch {
       setSearchResults([])
     }
+  }
+
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout>>()
+  function handleProductSearch(q: string) {
+    clearTimeout(searchTimerRef.current)
+    searchTimerRef.current = setTimeout(() => searchProducts(q), 250)
   }
 
   async function handleBarcodeEnter() {
@@ -213,6 +220,12 @@ export default function POSPage() {
     } catch {
       setCustomerResults([])
     }
+  }
+
+  const customerTimerRef = useRef<ReturnType<typeof setTimeout>>()
+  function handleCustomerSearch(q: string) {
+    clearTimeout(customerTimerRef.current)
+    customerTimerRef.current = setTimeout(() => searchCustomers(q), 250)
   }
 
   function updatePayment(index: number, patch: Partial<PaymentLine>) {
@@ -317,7 +330,7 @@ export default function POSPage() {
           <input
             ref={barcodeRef}
             value={barcodeInput}
-            onChange={(e) => searchProducts(e.target.value)}
+            onChange={(e) => handleProductSearch(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleBarcodeEnter()}
             placeholder="Scan barcode or search product by name..."
             className="w-full rounded-lg border border-slate-300 px-4 py-3 text-base dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
@@ -409,13 +422,13 @@ export default function POSPage() {
           {customer ? (
             <div className="flex items-center justify-between text-sm">
               <span>{customer.name}{customer.is_credit_customer ? ' (credit)' : ''}</span>
-              <button onClick={() => setCustomer(null)} className="text-red-500">Remove</button>
+              <button onClick={() => { setCustomer(null); setCustomerQuery(''); setCustomerResults([]); }} className="text-red-500">Remove</button>
             </div>
           ) : (
             <div className="relative">
               <input
                 value={customerQuery}
-                onChange={(e) => searchCustomers(e.target.value)}
+                onChange={(e) => handleCustomerSearch(e.target.value)}
                 placeholder="Search customer (optional)..."
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100"
               />

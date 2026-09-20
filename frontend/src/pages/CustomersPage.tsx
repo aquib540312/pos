@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { apiClient, apiErrorMessage } from '../api/client'
 import type { Customer, CustomerPayment } from '../types'
 
@@ -12,6 +12,7 @@ export default function CustomersPage() {
   const [payments, setPayments] = useState<CustomerPayment[]>([])
   const [showPaymentForm, setShowPaymentForm] = useState(false)
   const [paymentForm, setPaymentForm] = useState({ amount: '', method: 'cash', reference: '' })
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout>>()
   const [editId, setEditId] = useState<string | null>(null)
   const [form, setForm] = useState({
     name: '', name_arabic: '', phone: '', vat_number: '', cr_number: '', address: '',
@@ -20,13 +21,21 @@ export default function CustomersPage() {
   })
 
   async function load(q?: string) {
-    const res = await apiClient.get<Customer[]>('/party/customers', { params: q ? { search: q } : {} })
-    setCustomers(res.data)
+    try {
+      const res = await apiClient.get<Customer[]>('/party/customers', { params: q ? { search: q } : {} })
+      setCustomers(res.data)
+    } catch {
+      setCustomers([])
+    }
   }
 
   async function loadPayments(customerId: string) {
-    const res = await apiClient.get<CustomerPayment[]>(`/party/customers/${customerId}/payments`)
-    setPayments(res.data)
+    try {
+      const res = await apiClient.get<CustomerPayment[]>(`/party/customers/${customerId}/payments`)
+      setPayments(res.data)
+    } catch {
+      setPayments([])
+    }
   }
 
   useEffect(() => { load() }, [])
@@ -126,7 +135,7 @@ export default function CustomersPage() {
       {activeTab === 'customers' && (
         <>
           <div className="mb-4">
-            <input placeholder="Search by name or phone..." value={search} onChange={(e) => { setSearch(e.target.value); load(e.target.value) }} className="w-full max-w-sm rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100" />
+            <input placeholder="Search by name or phone..." value={search} onChange={(e) => { setSearch(e.target.value); clearTimeout(searchTimerRef.current); searchTimerRef.current = setTimeout(() => load(e.target.value), 250) }} className="w-full max-w-sm rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100" />
           </div>
           <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800">
             <table className="w-full text-left text-sm">

@@ -69,18 +69,30 @@ export default function PurchasingPage() {
   }, [])
 
   async function refreshOrders() {
-    const res = await apiClient.get<PurchaseOrder[]>('/purchasing/purchase-orders')
-    setOrders(res.data)
+    try {
+      const res = await apiClient.get<PurchaseOrder[]>('/purchasing/purchase-orders')
+      setOrders(res.data)
+    } catch {
+      setOrders([])
+    }
   }
 
   async function refreshReceipts() {
-    const res = await apiClient.get<GoodsReceipt[]>('/purchasing/goods-receipts')
-    setReceipts(res.data)
+    try {
+      const res = await apiClient.get<GoodsReceipt[]>('/purchasing/goods-receipts')
+      setReceipts(res.data)
+    } catch {
+      setReceipts([])
+    }
   }
 
   async function refreshReturns() {
-    const res = await apiClient.get<PurchaseReturn[]>('/purchasing/purchase-returns')
-    setReturns(res.data)
+    try {
+      const res = await apiClient.get<PurchaseReturn[]>('/purchasing/purchase-returns')
+      setReturns(res.data)
+    } catch {
+      setReturns([])
+    }
   }
 
   function supplierName(id: string) {

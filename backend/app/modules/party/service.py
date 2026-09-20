@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
@@ -121,7 +121,7 @@ class PartyService:
             amount=applied,
             method=method,
             reference=reference,
-            paid_at=datetime.utcnow(),
+            paid_at=datetime.now(timezone.utc),
         )
         self.customer_payments.add(payment)
         self.record_credit_payment(customer, applied)
@@ -150,7 +150,7 @@ class PartyService:
             amount=applied,
             method=method,
             reference=reference,
-            paid_at=datetime.utcnow(),
+            paid_at=datetime.now(timezone.utc),
             note=note,
         )
         self.supplier_payments.add(payment)

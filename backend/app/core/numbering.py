@@ -73,8 +73,11 @@ def next_document_number(
 
     if counter is None:
         base = _max_existing_number(db, model, organization_id)
-        db.add(DocumentCounter(organization_id=organization_id, prefix=prefix, year=year, last_number=base))
-        db.flush()
+        try:
+            db.add(DocumentCounter(organization_id=organization_id, prefix=prefix, year=year, last_number=base))
+            db.flush()
+        except IntegrityError:
+            db.rollback()
         counter = db.execute(
             select(DocumentCounter)
             .where(

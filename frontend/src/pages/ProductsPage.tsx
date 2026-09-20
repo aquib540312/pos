@@ -129,6 +129,7 @@ export default function ProductsPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [uploadingImage, setUploadingImage] = useState(false)
   const canManageCatalog = useCan(PERMS.CATALOG_MANAGE)
+  const productSearchTimerRef = useRef<ReturnType<typeof setTimeout>>()
 
   async function loadProducts(q?: string) {
     const res = await apiClient.get<Product[]>('/catalog/products', { params: q ? { search: q } : {} })
@@ -410,6 +411,7 @@ export default function ProductsPage() {
         )
         printWindow.document.close()
       }
+      setTimeout(() => URL.revokeObjectURL(url), 10000)
       setLabelProduct(null)
     } catch (err) {
       setError(apiErrorMessage(err))
@@ -726,7 +728,8 @@ export default function ProductsPage() {
           value={search}
           onChange={(e) => {
             setSearch(e.target.value)
-            loadProducts(e.target.value)
+            clearTimeout(productSearchTimerRef.current)
+            productSearchTimerRef.current = setTimeout(() => loadProducts(e.target.value), 250)
           }}
           className="w-full max-w-sm rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
         />

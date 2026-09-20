@@ -4,23 +4,42 @@ from datetime import date, datetime, timezone
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
-from app.models.loyalty import Coupon, GiftCard, GiftCardTransaction, LoyaltyTransaction
+from app.models.loyalty import Coupon, GiftCard, GiftCardTransaction, LoyaltyConfig, LoyaltyTransaction
 from app.models.party import Customer
 from app.modules.loyalty.repository import CouponRepository, GiftCardRepository
 
-POINTS_PER_RUPEE_SPENT = 0.01  # 1 point per SAR 100 taxable spend
-POINT_VALUE_IN_RUPEES = 1.0  # 1 point = SAR 1 discount on redemption
+DEFAULT_POINTS_PER_RUPEE_SPENT = 0.01
+DEFAULT_POINT_VALUE_IN_RUPEES = 1.0
 
 
 class LoyaltyService:
     def __init__(self, db: Session):
         self.db = db
 
-    def points_earned_for_amount(self, taxable_amount: float) -> float:
-        return round(taxable_amount * POINTS_PER_RUPEE_SPENT, 2)
+    def _get_config(self, organization_id: uuid.UUID) -> LoyaltyConfig:
+        config = self.db.query(LoyaltyConfig).filter_by(organization_id=organization_id).first()
+        if config is None:
+            config = LoyaltyConfig(
+                organization_id=organization_id,
+                points_per_rupee_spent=DEFAULT_POINTS_PER_RUPEE_SPENT,
+                point_value_in_rupees=DEFAULT_POINT_VALUE_IN_RUPEES,
+                min_taxable_amount=0,
+                is_enabled=True,
+            )
+            self.db.add(config)
+            self.db.flush()
+        return config
+
+    def points_earned_for_amount(self, organization_id: uuid.UUID, taxable_amount: float) -> float:
+        config = self._get_config(organization_id)
+        if not config.is_enabled:
+            return 0.0
+        if taxable_amount < float(config.min_taxable_amount):
+            return 0.0
+        return round(taxable_amount * float(config.points_per_rupee_spent), 2)
 
     def earn(self, customer: Customer, invoice_id: uuid.UUID, taxable_amount: float) -> float:
-        points = self.points_earned_for_amount(taxable_amount)
+        points = self.points_earned_for_amount(customer.organization_id, taxable_amount)
         if points <= 0:
             return 0.0
         customer.loyalty_points_balance = float(customer.loyalty_points_balance) + points
@@ -45,6 +64,7 @@ class LoyaltyService:
             raise ValidationError(
                 f"Customer has {customer.loyalty_points_balance} points, cannot redeem {points}"
             )
+        config = self._get_config(customer.organization_id)
         customer.loyalty_points_balance = float(customer.loyalty_points_balance) - points
         self.db.add(
             LoyaltyTransaction(
@@ -57,7 +77,7 @@ class LoyaltyService:
             )
         )
         self.db.flush()
-        return points * POINT_VALUE_IN_RUPEES
+        return points * float(config.point_value_in_rupees)
 
 
 class CouponService:

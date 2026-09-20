@@ -797,12 +797,12 @@ const tableMap = useMemo(() => {
           totalPaid={payments.reduce((s, p) => s + p.amount, 0)}
           cashChange={payments
             .filter((p) => p.method === 'cash')
-            .reduce((s, p) => s + Math.max(0, (p.received || p.amount) - p.amount), 0)}
+            .reduce((s, p) => s + Math.max(0, (p.received ?? p.amount) - p.amount), 0)}
           settling={settling}
           onClose={() => setShowSettle(false)}
           onComplete={() =>
             completeSettlement(
-              payments.filter((p) => p.method === 'cash').reduce((s, p) => s + Math.max(0, (p.received || p.amount) - p.amount), 0),
+              payments.filter((p) => p.method === 'cash').reduce((s, p) => s + Math.max(0, (p.received ?? p.amount) - p.amount), 0),
             )
           }
         />
@@ -1163,7 +1163,7 @@ function SettleModal({
 
         <div className="mb-4 max-h-[45vh] space-y-2 overflow-y-auto">
           {payments.map((p, i) => {
-            const lineChange = p.method === 'cash' ? Math.max(0, (p.received || p.amount) - p.amount) : 0
+            const lineChange = p.method === 'cash' ? Math.max(0, (p.received ?? p.amount) - p.amount) : 0
             return (
               <div key={i} className="rounded-xl border border-white/10 p-3">
                 <div className="flex gap-2">

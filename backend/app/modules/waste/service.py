@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from app.models.waste import WasteEntry
 
@@ -21,7 +21,7 @@ class WasteService:
             reason=reason,
             notes=notes,
             recorded_by=user_id,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
         )
         self.db.add(entry)
         self.db.flush()

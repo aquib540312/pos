@@ -66,16 +66,20 @@ def create_purchase_order(
     db: Session = Depends(get_db),
     user: User = Depends(require_permission(Perm.PURCHASE_CREATE)),
 ):
-    po = PurchasingService(db).create_purchase_order(
-        organization_id=user.organization_id,
-        branch_id=payload.branch_id,
-        supplier_id=payload.supplier_id,
-        order_date=payload.order_date,
-        notes=payload.notes,
-        items=[i.model_dump() for i in payload.items],
-    )
-    db.commit()
-    return po
+    try:
+        po = PurchasingService(db).create_purchase_order(
+            organization_id=user.organization_id,
+            branch_id=payload.branch_id,
+            supplier_id=payload.supplier_id,
+            order_date=payload.order_date,
+            notes=payload.notes,
+            items=[i.model_dump() for i in payload.items],
+        )
+        db.commit()
+        return po
+    except DomainError as exc:
+        db.rollback()
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
 
 
 @router.patch("/purchase-orders/{po_id}/status", response_model=PurchaseOrderResponse)
